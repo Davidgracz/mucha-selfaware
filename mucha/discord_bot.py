@@ -1838,6 +1838,36 @@ class MuchaClient(discord.Client):
                 int(self.cfg.language.connectome_word_control_candidates),
             ),
         )
+        self.llm_composer.provider_order = (
+            self.llm_composer._normalize_provider_order(
+                self.cfg.language.llm_provider_order
+            )
+        )
+        self.llm_composer.openai_model = str(
+            self.cfg.language.llm_openai_model
+        ).strip()
+        self.llm_composer.openai_api_key_env = str(
+            self.cfg.language.llm_openai_api_key_env
+        ).strip()
+        self.llm_composer.openai_base_url = str(
+            self.cfg.language.llm_openai_base_url
+        ).rstrip("/")
+        self.llm_composer.native_voice_strength = (
+            self.llm_composer._clamp01(
+                self.cfg.language.llm_native_voice_strength
+            )
+        )
+        self.llm_composer.rampancy_disorder_gain = (
+            self.llm_composer._clamp01(
+                self.cfg.language.llm_rampancy_disorder_gain
+            )
+        )
+        self.llm_composer.reasoning_effort = str(
+            self.cfg.language.llm_reasoning_effort
+        ).strip().lower()
+        self.llm_composer.verbosity = str(
+            self.cfg.language.llm_verbosity
+        ).strip().lower()
         self.voice_episodes.semantic_memory_enabled = bool(
             self.cfg.voice.semantic_memory_enabled
         )
