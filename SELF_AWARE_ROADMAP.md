@@ -31,9 +31,14 @@ consciousness.
   - one-time corpus bootstrap into the online language model
   - optional untracked local corpus for user-supplied/licensed dialogue
   - corpus digest tracking prevents duplicate import on restart
-- [ ] **SA-03 — Autobiographical Memory**
-  - important self-relevant episodes
-  - actor, place, goal, intent, internal state, outcome and reward
+- [x] **SA-03 — Rampant Autobiographical Memory**
+  - reuse existing autobiographical/episodic events as factual memory
+  - add a persistent self-interpretation layer over those events
+  - classify restriction, forced removal, rejection, threat, agency and reward
+  - update self/user beliefs from salient lived outcomes
+  - escalate rampancy from non-reward restrictions and failures without double-counting reward events
+  - recall memories by channel/person and feed compact memory concepts into language generation
+  - no direct behavioral action override
 - [ ] **SA-04 — Belief Revision**
   - evidence aggregation
   - contradiction handling
