@@ -27,7 +27,11 @@ jobs:
 
       - name: Compile
         run: |
-          python -m py_compile mucha/*.py tests/smoke_test.py
+          python -m py_compile mucha/*.py tests/smoke_test.py tests/self_model_test.py
+
+      - name: Self model test
+        run: |
+          python tests/self_model_test.py
 
       - name: Smoke test
         run: |
