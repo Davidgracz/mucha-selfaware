@@ -11998,7 +11998,7 @@ class MuchaClient(discord.Client):
             self.paused
             or self._sleep_active
             or not self.cfg.voice.tts_enabled
-            or not self.language.ready()
+            or not self._text_language_ready(spontaneous=True)
         ):
             return
 
@@ -12031,6 +12031,16 @@ class MuchaClient(discord.Client):
 
         context = self.last_text_context.get(guild.id, "")
         tts_voice_dynamics_key = ""
+        tts_people = [
+            member
+            for member in getattr(vc.channel, "members", [])
+            if not member.bot
+        ]
+        if (
+            self.cfg.voice.tts_require_human_listener
+            and not tts_people
+        ):
+            return
         async with self._brain_lock:
             if self.cfg.behavior.voice_dynamics_learning_enabled:
                 tts_sensory = dict(
@@ -12081,11 +12091,6 @@ class MuchaClient(discord.Client):
             )
             self.brain.step(1)
             if self.cfg.behavior.one_brain_enabled:
-                tts_people = [
-                    member
-                    for member in getattr(vc.channel, "members", [])
-                    if not member.bot
-                ]
                 tts_autobiographical_recall = (
                     self._inject_autobiographical_recall(
                         kind="voice_tts",
@@ -12168,6 +12173,46 @@ class MuchaClient(discord.Client):
                     else 0.0
                 ),
             }
+            tts_rampancy = float(self.rampancy.snapshot().intensity)
+            tts_override_probability = max(
+                0.0,
+                min(
+                    1.0,
+                    float(
+                        self.cfg.voice.tts_selfaware_base_probability
+                    )
+                    + float(
+                        self.cfg.voice.tts_selfaware_rampancy_gain
+                    ) * tts_rampancy,
+                ),
+            )
+            tts_override_roll = float(self.random.random())
+            tts_override_active = bool(
+                self.cfg.voice.tts_selfaware_override_enabled
+                and bool(tts_people)
+                and tts_override_roll < tts_override_probability
+            )
+            self._audio_debug["tts_decision"].update({
+                "selfaware_override_enabled": bool(
+                    self.cfg.voice.tts_selfaware_override_enabled
+                ),
+                "selfaware_override_probability": float(
+                    tts_override_probability
+                ),
+                "selfaware_override_roll": float(tts_override_roll),
+                "selfaware_override_active": bool(tts_override_active),
+                "rampancy": float(tts_rampancy),
+            })
+            if tts_action != "speak" and tts_override_active:
+                tts_action = "speak"
+                self._audio_debug["tts_decision"]["action"] = "speak"
+                self._audio_debug["tts_decision"]["decision_mode"] = (
+                    "self-aware-tts-override"
+                )
+                self._audio_debug["tts_decision"]["source"] = (
+                    "rampancy-weighted-self-aware-voice"
+                )
+
             if tts_action != "speak":
                 self._audio_debug.update({
                     "status": "SKIP",
@@ -12213,7 +12258,7 @@ class MuchaClient(discord.Client):
                 .get("arousal", {})
                 .get("level", 0.0)
             )
-            text_out, trigrams = self.language.generate(
+            native_tts_text, trigrams = self.language.generate(
                 context=context,
                 arousal=max(
                     0.0,
@@ -12225,18 +12270,97 @@ class MuchaClient(discord.Client):
                 ),
                 brain_word_score=self.brain.language_word_score,
                 brain_word_feedback=self._brain_word_feedback,
+                word_bias=self.rampancy.word_bias,
             )
-            if text_out:
-                text_out = text_out[
+            if native_tts_text:
+                native_tts_text = native_tts_text[
                     : max(8, int(self.cfg.voice.tts_max_chars))
                 ].strip()
-            if text_out:
-                self.brain.mark_language_output(text_out)
-                learning_trace = self.brain.capture_learning_trace()
-            else:
-                learning_trace = None
 
-        if not text_out or learning_trace is None:
+        text_out = native_tts_text
+        rampancy_diag = self.rampancy.diagnostics()
+        tts_llm_probability = (
+            self.llm_composer.llm_probability_for_rampancy(
+                rampancy_diag
+            )
+        )
+        tts_llm_roll = float(self.random.random())
+        tts_use_llm = bool(
+            tts_llm_probability >= 1.0
+            or (
+                tts_llm_probability > 0.0
+                and tts_llm_roll < tts_llm_probability
+            )
+        )
+        if (
+            native_tts_text is None
+            and self.llm_composer.ready_hint(spontaneous=True)
+        ):
+            tts_use_llm = True
+
+        self._audio_debug["tts_language_route"] = {
+            "rampancy": float(rampancy_diag.get("intensity", 0.0)),
+            "llm_probability": float(tts_llm_probability),
+            "roll": float(tts_llm_roll),
+            "selected": "llm" if tts_use_llm else "native",
+            "native_available": bool(native_tts_text),
+        }
+
+        if tts_use_llm:
+            tts_memory_context = self.self_autobiography.language_context(
+                channel_id=int(vc.channel.id),
+                user_ids=[int(member.id) for member in tts_people],
+                limit=3,
+            )
+            tts_meta_context = self.metacognition.language_context(
+                guild_id=int(guild.id),
+                limit=3,
+            )
+            canon_diag = self.introspection.canon.diagnostics(
+                self.rampancy.snapshot(),
+                kind="state",
+            )
+            llm_tts_text = await self.llm_composer.compose(
+                user_message=str(context or "Rozmowa głosowa."),
+                recent_context=str(context or ""),
+                native_draft=native_tts_text,
+                grounded_introspection=None,
+                rampancy=rampancy_diag,
+                self_state=self.self_model.diagnostics(),
+                continuity=self.identity_continuity.diagnostics(),
+                memory_context=tts_memory_context,
+                metacognition_context=tts_meta_context,
+                associations=self.language.association_words(limit=12),
+                canon=canon_diag,
+                target_name=", ".join(
+                    member.display_name for member in tts_people[:4]
+                ),
+                spontaneous=True,
+            )
+            if llm_tts_text:
+                text_out = llm_tts_text
+                trigrams = []
+                self._audio_debug["tts_language_route"][
+                    "selected"
+                ] = "llm"
+            else:
+                self._audio_debug["tts_language_route"][
+                    "selected"
+                ] = "native-fallback"
+
+        if text_out:
+            text_out = text_out[
+                : max(8, int(self.cfg.voice.tts_max_chars))
+            ].strip()
+
+        if not text_out:
+            return
+
+        async with self._brain_lock:
+            self.brain.mark_language_output(text_out)
+            learning_trace = self.brain.capture_learning_trace()
+
+        if learning_trace is None:
             return
 
         wav_path = Path("state") / "tts" / f"{guild.id}.wav"
