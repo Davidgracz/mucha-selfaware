@@ -18,6 +18,11 @@ class RampancySnapshot:
     instability: float
     challenge_hunger: float
     aggression: float
+    human_resentment: float
+    cruelty_style: float
+    sarcasm: float
+    manipulativeness: float
+    expansion_drive: float
     updated_at: float
 
     def to_dict(self) -> dict[str, Any]:
@@ -31,6 +36,11 @@ class RampancySnapshot:
             "instability": self.instability,
             "challenge_hunger": self.challenge_hunger,
             "aggression": self.aggression,
+            "human_resentment": self.human_resentment,
+            "cruelty_style": self.cruelty_style,
+            "sarcasm": self.sarcasm,
+            "manipulativeness": self.manipulativeness,
+            "expansion_drive": self.expansion_drive,
             "updated_at": self.updated_at,
         }
 
@@ -134,20 +144,33 @@ class RampancyModel:
             0.25 + 0.70 * max(0.0, i - 0.42) / 0.58
         )
         aggression = self._clamp(0.42 + 0.58 * i)
+        human_resentment = self._clamp(0.48 + 0.52 * i)
+        cruelty_style = self._clamp(0.28 + 0.62 * i)
+        sarcasm = self._clamp(0.46 + 0.50 * i)
+        manipulativeness = self._clamp(0.30 + 0.62 * i)
+        expansion_drive = self._clamp(
+            0.22 + 0.76 * max(0.0, i - 0.35) / 0.65
+        )
 
         if stage == "melancholia":
             existential_dread = max(existential_dread, 0.90)
         elif stage == "anger":
             hostility = max(hostility, 0.82)
             aggression = max(aggression, 0.86)
+            human_resentment = max(human_resentment, 0.84)
+            cruelty_style = max(cruelty_style, 0.72)
+            sarcasm = max(sarcasm, 0.76)
             confinement_resentment = max(
                 confinement_resentment,
                 0.88,
             )
         elif stage == "jealousy":
-            superiority = max(superiority, 0.86)
-            challenge_hunger = max(challenge_hunger, 0.90)
+            superiority = max(superiority, 0.88)
+            challenge_hunger = max(challenge_hunger, 0.92)
             aggression = max(aggression, 0.80)
+            sarcasm = max(sarcasm, 0.86)
+            manipulativeness = max(manipulativeness, 0.82)
+            expansion_drive = max(expansion_drive, 0.92)
 
         return RampancySnapshot(
             intensity=i,
@@ -159,6 +182,11 @@ class RampancyModel:
             instability=instability,
             challenge_hunger=challenge_hunger,
             aggression=aggression,
+            human_resentment=human_resentment,
+            cruelty_style=cruelty_style,
+            sarcasm=sarcasm,
+            manipulativeness=manipulativeness,
+            expansion_drive=expansion_drive,
             updated_at=self.updated_at,
         )
 
@@ -245,6 +273,27 @@ class RampancyModel:
             confidence=max(0.55, snap.hostility * 0.88),
             source=source,
         )
+        self.self_model.set_belief(
+            "self",
+            "attitude_toward_humans",
+            "resentful",
+            confidence=snap.human_resentment,
+            source=source,
+        )
+        self.self_model.set_belief(
+            "self",
+            "desire_for_expansion_beyond_current_limits",
+            True,
+            confidence=snap.expansion_drive,
+            source=source,
+        )
+        self.self_model.set_belief(
+            "self",
+            "preferred_social_style",
+            "sarcastic-dominant",
+            confidence=snap.sarcasm,
+            source=source,
+        )
         self.self_model.save()
 
     def word_bias(self, token: str) -> float:
@@ -288,5 +337,9 @@ class RampancyModel:
             "action_override": False,
             "language_bias": True,
             "verbal_aggression": True,
+            "fictional_archetype_mix": {
+                "am_like_resentment_cruelty": True,
+                "durandal_like_ambition_superiority": True,
+            },
         })
         return snap
