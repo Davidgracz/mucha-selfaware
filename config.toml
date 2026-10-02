@@ -134,8 +134,8 @@ coherence_attempts = 5
 # SELF Language Cortex. If OPENAI_API_KEY is missing or the request fails,
 # Mucha falls back to her native connectome/word-model generator.
 llm_composer_enabled = true
-# Provider fallback: Groq Free -> local Ollama -> OpenAI (optional) -> native.
-llm_provider_order = "groq,ollama,openai"
+# Provider fallback: Groq Free -> local Ollama -> native. OpenAI stays optional.
+llm_provider_order = "groq,ollama"
 llm_groq_model = "qwen/qwen3.8-27b"
 llm_groq_api_key_env = "GROQ_API_KEY"
 llm_groq_base_url = "https://api.groq.com/openai/v1"
