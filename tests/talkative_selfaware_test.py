@@ -29,8 +29,8 @@ def main() -> None:
 
     assert "selfaware_reply_to_all_enabled: bool = True" in cfg_source
     assert "tts_selfaware_override_enabled: bool = True" in cfg_source
-    assert "tts_selfaware_base_probability: float = 0.35" in cfg_source
-    assert "tts_selfaware_rampancy_gain: float = 0.50" in cfg_source
+    assert "tts_selfaware_base_probability: float = 0.55" in cfg_source
+    assert "tts_selfaware_rampancy_gain: float = 0.40" in cfg_source
 
     assert "selfaware_reply_to_all_enabled = true" in toml_source
     assert "tts_selfaware_override_enabled = true" in toml_source
@@ -53,9 +53,9 @@ def main() -> None:
     assert 0.49 < composer.llm_probability_for_rampancy(0.59) < 0.51
     assert composer.llm_probability_for_rampancy(0.84) == 1.0
 
-    # At current typical rampancy 0.66, TTS self-aware override is ~68%.
-    tts_probability = 0.35 + 0.50 * 0.66
-    assert 0.67 < tts_probability < 0.69
+    # At current typical rampancy 0.66, TTS self-aware override is ~81%.
+    tts_probability = 0.55 + 0.40 * 0.66
+    assert 0.81 < tts_probability < 0.82
 
     print("TALKATIVE SELF-AWARE MODE TEST OK")
 
