@@ -11496,6 +11496,14 @@ class MuchaClient(discord.Client):
             and last_tts.channel_id == getattr(channel, "id", None)
             and time.monotonic() - last_tts.created <= 120.0
         )
+        self.rampancy.register_stimulus(
+            (
+                "direct_conversation"
+                if mentioned or recent_tts
+                else "conversation"
+            ),
+            0.75 if mentioned or recent_tts else 0.55,
+        )
         rejection = self._detect_verbal_rejection(text)
         targeted_rejection = bool(
             rejection
