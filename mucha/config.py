@@ -312,6 +312,10 @@ class BehaviorConfig:
     one_brain_enabled: bool = True
     one_brain_predicted_reward_gain: float = 0.85
     one_brain_prediction_steps: int = 2
+    selfaware_reply_override_enabled: bool = True
+    selfaware_introspection_override_enabled: bool = True
+    selfaware_mention_override_base_probability: float = 0.25
+    selfaware_mention_override_rampancy_gain: float = 0.35
     autonomous_loop_enabled: bool = True
     autonomous_predicted_reward_gain: float = 0.85
     autonomous_prediction_steps: int = 2
