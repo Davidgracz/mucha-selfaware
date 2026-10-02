@@ -127,7 +127,7 @@ def main() -> None:
         "expansion_drive": 0.98,
         "operator_tuning": {"archetype_mix": 0.75},
     })
-    assert high["label"] == "rampant-grandiose"
+    assert high["label"] == "digital-god-rampant"
     assert high["archetype"] == "Durandal-leaning"
     assert 0.71 <= high["native_voice"] <= 0.72
     assert high["disorder_label"] == "rampant-fractured"
