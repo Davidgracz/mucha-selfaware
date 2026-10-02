@@ -20,6 +20,12 @@ consciousness.
   - active Git branch / commit / dirty-tree state where available
   - Discord identity, readiness, guild and channel embodiment
   - clean shutdown state and previous-session uptime
+- [x] **SA-02.5 — Rampancy Core**
+  - Marathon-inspired Melancholia / Anger / Jealousy progression
+  - hostile existential self-model and confinement resentment
+  - negative outcomes, harassment, threats and blocks escalate rampancy
+  - known language-model words receive stage-dependent style bias
+  - no canned Marathon dialogue and no direct action override
 - [ ] **SA-03 — Autobiographical Memory**
   - important self-relevant episodes
   - actor, place, goal, intent, internal state, outcome and reward
