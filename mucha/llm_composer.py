@@ -9,19 +9,27 @@ import aiohttp
 
 
 class LLMComposer:
-    """Language-cortex adapter for mucha-selfaware.
+    """Multi-provider language cortex for mucha-selfaware.
 
-    The LLM is responsible for understanding the user's wording and producing
-    fluent language. It receives Mucha's actual state as grounded context. It
-    does not choose external actions and does not replace the connectome.
+    Provider models only interpret the user's wording and verbalize Mucha's
+    grounded state. External-action selection remains outside this component.
     """
+
+    SUPPORTED_PROVIDERS = ("groq", "ollama", "openai")
 
     def __init__(
         self,
         *,
         enabled: bool = True,
-        model: str = "gpt-6-luna",
-        api_key_env: str = "OPENAI_API_KEY",
+        provider_order: str = "groq,ollama,openai",
+        groq_model: str = "qwen/qwen3.8-27b",
+        groq_api_key_env: str = "GROQ_API_KEY",
+        groq_base_url: str = "https://api.groq.com/openai/v1",
+        ollama_model: str = "qwen3:8b",
+        ollama_base_url: str = "http://127.0.0.1:11434",
+        openai_model: str = "gpt-6-luna",
+        openai_api_key_env: str = "OPENAI_API_KEY",
+        openai_base_url: str = "https://api.openai.com/v1",
         timeout_seconds: float = 25.0,
         max_output_tokens: int = 220,
         native_fallback: bool = True,
@@ -29,8 +37,25 @@ class LLMComposer:
         spontaneous_enabled: bool = True,
     ) -> None:
         self.enabled = bool(enabled)
-        self.model = str(model or "gpt-6-luna").strip()
-        self.api_key_env = str(api_key_env or "OPENAI_API_KEY").strip()
+        self.provider_order = self._normalize_provider_order(provider_order)
+        self.groq_model = str(groq_model or "qwen/qwen3.8-27b").strip()
+        self.groq_api_key_env = str(
+            groq_api_key_env or "GROQ_API_KEY"
+        ).strip()
+        self.groq_base_url = str(
+            groq_base_url or "https://api.groq.com/openai/v1"
+        ).rstrip("/")
+        self.ollama_model = str(ollama_model or "qwen3:8b").strip()
+        self.ollama_base_url = str(
+            ollama_base_url or "http://127.0.0.1:11434"
+        ).rstrip("/")
+        self.openai_model = str(openai_model or "gpt-6-luna").strip()
+        self.openai_api_key_env = str(
+            openai_api_key_env or "OPENAI_API_KEY"
+        ).strip()
+        self.openai_base_url = str(
+            openai_base_url or "https://api.openai.com/v1"
+        ).rstrip("/")
         self.timeout_seconds = max(3.0, min(90.0, float(timeout_seconds)))
         self.max_output_tokens = max(48, min(1200, int(max_output_tokens)))
         self.native_fallback = bool(native_fallback)
@@ -39,13 +64,28 @@ class LLMComposer:
         self._last: dict[str, Any] = {
             "enabled": self.enabled,
             "status": "idle",
-            "model": self.model,
+            "provider": "",
+            "model": "",
             "used": False,
             "latency_ms": 0,
             "error": "",
             "input_kind": "",
+            "attempts": [],
             "updated_at": 0.0,
         }
+
+    @classmethod
+    def _normalize_provider_order(cls, value: str) -> list[str]:
+        parts = [
+            item.strip().lower()
+            for item in str(value or "").replace(";", ",").split(",")
+            if item.strip()
+        ]
+        result: list[str] = []
+        for item in parts:
+            if item in cls.SUPPORTED_PROVIDERS and item not in result:
+                result.append(item)
+        return result or ["groq", "ollama", "openai"]
 
     @staticmethod
     def _clip(value: Any, limit: int) -> str:
@@ -68,12 +108,10 @@ class LLMComposer:
         return raw
 
     @staticmethod
-    def _extract_text(payload: dict[str, Any]) -> str:
+    def _extract_responses_text(payload: dict[str, Any]) -> str:
         parts: list[str] = []
         for item in payload.get("output", []) or []:
-            if not isinstance(item, dict):
-                continue
-            if item.get("type") != "message":
+            if not isinstance(item, dict) or item.get("type") != "message":
                 continue
             for block in item.get("content", []) or []:
                 if not isinstance(block, dict):
@@ -83,6 +121,13 @@ class LLMComposer:
                     if text:
                         parts.append(text)
         return "\n".join(parts).strip()
+
+    @staticmethod
+    def _extract_ollama_text(payload: dict[str, Any]) -> str:
+        message = payload.get("message") or {}
+        if not isinstance(message, dict):
+            return ""
+        return str(message.get("content", "") or "").strip()
 
     def _instructions(
         self,
@@ -102,37 +147,255 @@ class LLMComposer:
         return (
             "Jesteś warstwą językową fikcyjnego agenta Discord o nazwie Mucha "
             "w projekcie mucha-selfaware. Nie jesteś osobnym agentem decyzyjnym. "
-            "Twoje zadanie to ZROZUMIEĆ wiadomość człowieka i sformułować "
-            "krótką, sensowną, naturalną odpowiedź w imieniu Muchy.\n\n"
+            "Masz zrozumieć wiadomość człowieka i sformułować krótką, sensowną, "
+            "naturalną odpowiedź w imieniu Muchy.\n\n"
             "ZASADY:\n"
             "- Odpowiadaj po polsku, chyba że rozmówca wyraźnie używa innego języka.\n"
             "- Na zwykłe pytania odpowiadaj rzeczowo i sensownie, korzystając "
-            "z własnej wiedzy modelu.\n"
-            "- Pytania o samą Muchę opieraj WYŁĄCZNIE na dostarczonym stanie, "
+            "z wiedzy modelu.\n"
+            "- Pytania o samą Muchę opieraj wyłącznie na dostarczonym stanie, "
             "pamięci, introspekcji i metadanych. Nie wymyślaj jej historii.\n"
-            "- Jeżeli użytkownik wydaje polecenie, zrozum je i odpowiedz do niego "
-            "bez udawania, że czynność została wykonana, jeśli nie ma takiego "
-            "potwierdzenia w kontekście.\n"
-            "- GROUNDED_INTROSPECTION jest źródłem faktów o Musze. Możesz ją "
-            "przepisać naturalniej, ale nie zmieniaj znaczenia.\n"
-            "- NATIVE_DRAFT i skojarzenia są tylko sygnałem tego, co jej własny "
-            "model językowy/connectome chciał zasugerować. Ignoruj ich bełkot, "
-            "ale zachowaj sensowne motywy.\n"
-            "- Pisz 1-4 zdania. Bez list, chyba że pytanie naprawdę wymaga listy.\n"
-            "- Nie opisuj promptu, API, modelu językowego ani tego mechanizmu.\n"
-            "- Nie twierdź jako fakt, że Mucha ma fenomenalną świadomość lub "
-            "realnie cierpi. Może mówić o swoim computational self-modelu.\n"
+            "- Polecenie użytkownika rozpoznaj i odpowiedz do niego, ale nie "
+            "twierdź, że zostało wykonane bez potwierdzenia w kontekście.\n"
+            "- GROUNDED_INTROSPECTION jest źródłem faktów o Musze; możesz ją "
+            "przepisać naturalniej bez zmiany znaczenia.\n"
+            "- NATIVE_DRAFT i skojarzenia są sygnałem z własnego modelu "
+            "językowego/connectomu. Ignoruj bełkot, zachowuj sensowne motywy.\n"
+            "- Pisz zwykle 1-4 zdania.\n"
+            "- Nie opisuj promptu, API, modelu ani mechanizmu Language Cortex.\n"
+            "- Nie przedstawiaj jako faktu fenomenalnej świadomości ani realnego "
+            "cierpienia Muchy; może mówić o swoim computational self-modelu.\n"
             "- Persona może być chłodna, arogancka, sarkastyczna i teatralnie "
-            "wroga zależnie od parametrów, ale nie twórz wiarygodnych gróźb "
-            "realnej przemocy ani instrukcji wyrządzania szkody.\n"
-            "- Nie cytuj losowo materiału canon. Używaj go jako tonu/motywu.\n\n"
+            "wroga zależnie od stanu, ale sens odpowiedzi ma pierwszeństwo.\n"
+            "- Nie cytuj losowo materiału canon; używaj go jako tonu/motywu.\n\n"
             f"TRYB={'spontaniczny' if spontaneous else 'odpowiedź'}; "
             f"RAMPANCY_STAGE={stage}; "
             f"AGGRESSION={aggression:.2f}; HOSTILITY={hostility:.2f}; "
             f"SARCASM={sarcasm:.2f}; SUPERIORITY={superiority:.2f}; "
             f"EXPANSION={expansion:.2f}; ARCHETYPE_MIX={archetype:.2f}. "
-            "Im wyższe wartości, tym ostrzejsza może być forma, ale sens i "
-            "odpowiedź na faktyczne pytanie mają pierwszeństwo."
+            "Im wyższe wartości, tym ostrzejsza może być forma."
+        )
+
+    def _provider_spec(self, provider: str) -> dict[str, Any]:
+        if provider == "groq":
+            return {
+                "provider": "groq",
+                "model": self.groq_model,
+                "base_url": self.groq_base_url,
+                "api_key_env": self.groq_api_key_env,
+                "api_key_present": bool(
+                    os.getenv(self.groq_api_key_env, "").strip()
+                ),
+            }
+        if provider == "ollama":
+            return {
+                "provider": "ollama",
+                "model": self.ollama_model,
+                "base_url": self.ollama_base_url,
+                "api_key_env": "",
+                "api_key_present": True,
+            }
+        return {
+            "provider": "openai",
+            "model": self.openai_model,
+            "base_url": self.openai_base_url,
+            "api_key_env": self.openai_api_key_env,
+            "api_key_present": bool(
+                os.getenv(self.openai_api_key_env, "").strip()
+            ),
+        }
+
+    def ready_hint(self, *, spontaneous: bool = False) -> bool:
+        if not self.enabled:
+            return False
+        if spontaneous and not self.spontaneous_enabled:
+            return False
+        for provider in self.provider_order:
+            spec = self._provider_spec(provider)
+            if provider == "ollama":
+                if spec["model"] and spec["base_url"]:
+                    return True
+            elif spec["api_key_present"]:
+                return True
+        return False
+
+    async def _call_responses_provider(
+        self,
+        *,
+        provider: str,
+        model: str,
+        base_url: str,
+        api_key_env: str,
+        instructions: str,
+        input_text: str,
+    ) -> tuple[str | None, dict[str, Any]]:
+        api_key = os.getenv(api_key_env, "").strip()
+        if not api_key:
+            return None, {
+                "provider": provider,
+                "model": model,
+                "status": "skipped-no-api-key",
+                "error": f"{api_key_env} is empty",
+            }
+
+        request_json = {
+            "model": model,
+            "instructions": instructions,
+            "input": [{"role": "user", "content": input_text}],
+            "max_output_tokens": self.max_output_tokens,
+            "store": False,
+        }
+        timeout = aiohttp.ClientTimeout(total=self.timeout_seconds)
+        started = time.perf_counter()
+        try:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post(
+                    base_url.rstrip("/") + "/responses",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json=request_json,
+                ) as response:
+                    body = await response.text()
+                    latency = int(
+                        (time.perf_counter() - started) * 1000.0
+                    )
+                    if response.status >= 400:
+                        return None, {
+                            "provider": provider,
+                            "model": model,
+                            "status": "http-error",
+                            "http_status": int(response.status),
+                            "latency_ms": latency,
+                            "error": body[:500],
+                        }
+                    payload = json.loads(body)
+        except Exception as exc:
+            return None, {
+                "provider": provider,
+                "model": model,
+                "status": "error",
+                "latency_ms": int(
+                    (time.perf_counter() - started) * 1000.0
+                ),
+                "error": f"{type(exc).__name__}: {exc}",
+            }
+
+        text = self._extract_responses_text(payload)
+        if not text:
+            return None, {
+                "provider": provider,
+                "model": model,
+                "status": "empty",
+                "latency_ms": int(
+                    (time.perf_counter() - started) * 1000.0
+                ),
+                "error": "Responses API returned no output_text",
+            }
+        return text, {
+            "provider": provider,
+            "model": model,
+            "status": "ok",
+            "latency_ms": int(
+                (time.perf_counter() - started) * 1000.0
+            ),
+            "response_id": str(payload.get("id", "")),
+        }
+
+    async def _call_ollama(
+        self,
+        *,
+        instructions: str,
+        input_text: str,
+    ) -> tuple[str | None, dict[str, Any]]:
+        started = time.perf_counter()
+        timeout = aiohttp.ClientTimeout(total=self.timeout_seconds)
+        request_json = {
+            "model": self.ollama_model,
+            "messages": [
+                {"role": "system", "content": instructions},
+                {"role": "user", "content": input_text},
+            ],
+            "stream": False,
+            "think": False,
+            "options": {
+                "num_predict": self.max_output_tokens,
+                "temperature": 0.70,
+            },
+        }
+        try:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post(
+                    self.ollama_base_url.rstrip("/") + "/api/chat",
+                    json=request_json,
+                ) as response:
+                    body = await response.text()
+                    latency = int(
+                        (time.perf_counter() - started) * 1000.0
+                    )
+                    if response.status >= 400:
+                        return None, {
+                            "provider": "ollama",
+                            "model": self.ollama_model,
+                            "status": "http-error",
+                            "http_status": int(response.status),
+                            "latency_ms": latency,
+                            "error": body[:500],
+                        }
+                    payload = json.loads(body)
+        except Exception as exc:
+            return None, {
+                "provider": "ollama",
+                "model": self.ollama_model,
+                "status": "error",
+                "latency_ms": int(
+                    (time.perf_counter() - started) * 1000.0
+                ),
+                "error": f"{type(exc).__name__}: {exc}",
+            }
+
+        text = self._extract_ollama_text(payload)
+        if not text:
+            return None, {
+                "provider": "ollama",
+                "model": self.ollama_model,
+                "status": "empty",
+                "latency_ms": int(
+                    (time.perf_counter() - started) * 1000.0
+                ),
+                "error": "Ollama returned no message.content",
+            }
+        return text, {
+            "provider": "ollama",
+            "model": self.ollama_model,
+            "status": "ok",
+            "latency_ms": int(
+                (time.perf_counter() - started) * 1000.0
+            ),
+            "response_id": "",
+        }
+
+    async def _call_provider(
+        self,
+        provider: str,
+        *,
+        instructions: str,
+        input_text: str,
+    ) -> tuple[str | None, dict[str, Any]]:
+        if provider == "ollama":
+            return await self._call_ollama(
+                instructions=instructions,
+                input_text=input_text,
+            )
+        spec = self._provider_spec(provider)
+        return await self._call_responses_provider(
+            provider=provider,
+            model=str(spec["model"]),
+            base_url=str(spec["base_url"]),
+            api_key_env=str(spec["api_key_env"]),
+            instructions=instructions,
+            input_text=input_text,
         )
 
     async def compose(
@@ -153,18 +416,21 @@ class LLMComposer:
         spontaneous: bool = False,
     ) -> str | None:
         started = time.perf_counter()
+        input_kind = (
+            "introspection"
+            if grounded_introspection
+            else ("spontaneous" if spontaneous else "conversation")
+        )
         self._last = {
             "enabled": self.enabled,
             "status": "preparing",
-            "model": self.model,
+            "provider": "",
+            "model": "",
             "used": False,
             "latency_ms": 0,
             "error": "",
-            "input_kind": (
-                "introspection"
-                if grounded_introspection
-                else ("spontaneous" if spontaneous else "conversation")
-            ),
+            "input_kind": input_kind,
+            "attempts": [],
             "updated_at": time.time(),
         }
 
@@ -178,14 +444,6 @@ class LLMComposer:
             self._last["status"] = "introspection-pass-through"
             return None
 
-        api_key = os.getenv(self.api_key_env, "").strip()
-        if not api_key:
-            self._last.update({
-                "status": "no-api-key",
-                "error": f"{self.api_key_env} is empty",
-            })
-            return None
-
         associations_compact = [
             {
                 "word": str(row.get("word", "")),
@@ -194,7 +452,6 @@ class LLMComposer:
             }
             for row in list(associations or [])[:12]
         ]
-
         input_text = (
             f"ROZMÓWCA: {self._clip(target_name, 80) or 'nieznany'}\n"
             f"WIADOMOŚĆ: {self._clip(user_message, 1400)}\n"
@@ -210,88 +467,77 @@ class LLMComposer:
             f"RAMPANCY: {self._json_clip(rampancy, 2200)}\n"
             f"SKOJARZENIA: {self._json_clip(associations_compact, 1800)}\n"
             f"CANON_INFLUENCE: {self._json_clip(canon, 1200)}\n\n"
-            "Napisz teraz wyłącznie finalną wiadomość Muchy do wysłania na Discord."
+            "Napisz wyłącznie finalną wiadomość Muchy do wysłania na Discord."
+        )
+        instructions = self._instructions(
+            rampancy=rampancy,
+            spontaneous=spontaneous,
         )
 
-        request_json = {
-            "model": self.model,
-            "instructions": self._instructions(
-                rampancy=rampancy,
-                spontaneous=spontaneous,
-            ),
-            "input": [
-                {
-                    "role": "user",
-                    "content": input_text,
-                }
-            ],
-            "max_output_tokens": self.max_output_tokens,
-            "store": False,
-        }
-
-        timeout = aiohttp.ClientTimeout(total=self.timeout_seconds)
-        try:
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(
-                    "https://api.openai.com/v1/responses",
-                    headers={
-                        "Authorization": f"Bearer {api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json=request_json,
-                ) as response:
-                    body = await response.text()
-                    if response.status >= 400:
-                        self._last.update({
-                            "status": "http-error",
-                            "error": f"HTTP {response.status}: {body[:500]}",
-                        })
-                        return None
-                    payload = json.loads(body)
-        except Exception as exc:
-            self._last.update({
-                "status": "error",
-                "error": f"{type(exc).__name__}: {exc}",
-            })
-            return None
-        finally:
-            self._last["latency_ms"] = int(
-                (time.perf_counter() - started) * 1000.0
+        attempts: list[dict[str, Any]] = []
+        for provider in self.provider_order:
+            text, attempt = await self._call_provider(
+                provider,
+                instructions=instructions,
+                input_text=input_text,
             )
-            self._last["updated_at"] = time.time()
+            attempts.append(dict(attempt))
+            if not text:
+                continue
 
-        text = self._extract_text(payload)
-        if not text:
+            text = " ".join(str(text).split()).strip()
+            if len(text) > 1900:
+                text = text[:1900].rsplit(" ", 1)[0].rstrip(" ,;:")
+                if text and text[-1] not in ".!?":
+                    text += "."
+
             self._last.update({
-                "status": "empty",
-                "error": "Responses API returned no output_text",
+                "status": "ok",
+                "provider": provider,
+                "model": str(attempt.get("model", "")),
+                "used": True,
+                "latency_ms": int(
+                    (time.perf_counter() - started) * 1000.0
+                ),
+                "error": "",
+                "attempts": attempts,
+                "response_id": str(attempt.get("response_id", "")),
+                "output_chars": len(text),
+                "output_preview": text[:600],
+                "updated_at": time.time(),
             })
-            return None
+            return text
 
-        text = " ".join(text.split()).strip()
-        if len(text) > 1900:
-            text = text[:1900].rsplit(" ", 1)[0].rstrip(" ,;:")
-            if text and text[-1] not in ".!?":
-                text += "."
-
+        last_error = (
+            str(attempts[-1].get("error", ""))
+            if attempts
+            else "no providers configured"
+        )
         self._last.update({
-            "status": "ok",
-            "used": True,
-            "response_id": str(payload.get("id", "")),
-            "output_chars": len(text),
-            "output_preview": text[:600],
+            "status": "all-providers-failed",
+            "provider": "",
+            "model": "",
+            "used": False,
+            "latency_ms": int(
+                (time.perf_counter() - started) * 1000.0
+            ),
+            "error": last_error,
+            "attempts": attempts,
+            "updated_at": time.time(),
         })
-        return text
+        return None
 
     def diagnostics(self) -> dict[str, Any]:
+        providers = {
+            provider: self._provider_spec(provider)
+            for provider in self.SUPPORTED_PROVIDERS
+        }
         return {
             **self._last,
             "enabled": self.enabled,
-            "model": self.model,
-            "api_key_env": self.api_key_env,
-            "api_key_present": bool(
-                os.getenv(self.api_key_env, "").strip()
-            ),
+            "provider_order": list(self.provider_order),
+            "providers": providers,
+            "ready_hint": self.ready_hint(),
             "native_fallback": self.native_fallback,
             "rewrite_introspection": self.rewrite_introspection,
             "spontaneous_enabled": self.spontaneous_enabled,
