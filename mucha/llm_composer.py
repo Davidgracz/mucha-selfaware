@@ -279,6 +279,7 @@ class LLMComposer:
             "used": True,
             "response_id": str(payload.get("id", "")),
             "output_chars": len(text),
+            "output_preview": text[:600],
         })
         return text
 
