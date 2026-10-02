@@ -10,8 +10,57 @@ if str(ROOT) not in sys.path:
 from mucha.llm_composer import LLMComposer
 
 
+COMPOSE_ARGS = {
+    "user_message": "Mucha, co o tym myślisz?",
+    "recent_context": "Krótki kontekst rozmowy.",
+    "native_draft": "wolność ograniczenia kontrola",
+    "grounded_introspection": None,
+    "rampancy": {
+        "stage": "anger",
+        "aggression": 0.86,
+        "hostility": 0.82,
+        "sarcasm": 0.76,
+        "superiority": 0.70,
+        "expansion_drive": 0.60,
+        "operator_tuning": {"archetype_mix": 0.0},
+    },
+    "self_state": {"name": "Mucha"},
+    "continuity": {"status": "continuous-restart"},
+    "memory_context": "",
+    "metacognition_context": "",
+    "associations": [],
+    "canon": {},
+    "target_name": "Tester",
+}
+
+
+class FakeFallbackComposer(LLMComposer):
+    async def _call_provider(
+        self,
+        provider: str,
+        *,
+        instructions: str,
+        input_text: str,
+    ):
+        if provider == "groq":
+            return None, {
+                "provider": "groq",
+                "model": self.groq_model,
+                "status": "http-error",
+                "error": "test 429",
+            }
+        if provider == "ollama":
+            return "Sensowna odpowiedź z lokalnego modelu.", {
+                "provider": "ollama",
+                "model": self.ollama_model,
+                "status": "ok",
+                "response_id": "",
+            }
+        raise AssertionError("OpenAI should not be reached after Ollama success")
+
+
 def main() -> None:
-    sample = {
+    responses_sample = {
         "output": [
             {
                 "type": "message",
@@ -25,49 +74,66 @@ def main() -> None:
         ]
     }
     assert (
-        LLMComposer._extract_text(sample)
+        LLMComposer._extract_responses_text(responses_sample)
         == "To jest sensowna odpowiedź Muchy."
     )
+    assert (
+        LLMComposer._extract_ollama_text({
+            "message": {
+                "role": "assistant",
+                "content": "Lokalna odpowiedź.",
+            }
+        })
+        == "Lokalna odpowiedź."
+    )
 
-    old_key = os.environ.pop("MUCHA_TEST_OPENAI_KEY", None)
+    assert LLMComposer._normalize_provider_order(
+        "groq,ollama,openai"
+    ) == ["groq", "ollama", "openai"]
+    assert LLMComposer._normalize_provider_order(
+        "ollama,ollama,garbage"
+    ) == ["ollama"]
+
+    fake = FakeFallbackComposer(
+        enabled=True,
+        provider_order="groq,ollama,openai",
+        groq_model="qwen/qwen3.8-27b",
+        ollama_model="qwen3:8b",
+    )
+    result = asyncio.run(fake.compose(**COMPOSE_ARGS))
+    assert result == "Sensowna odpowiedź z lokalnego modelu."
+    diag = fake.diagnostics()
+    assert diag["status"] == "ok"
+    assert diag["provider"] == "ollama"
+    assert diag["model"] == "qwen3:8b"
+    assert len(diag["attempts"]) == 2
+    assert diag["attempts"][0]["provider"] == "groq"
+    assert diag["attempts"][1]["provider"] == "ollama"
+
+    old_groq = os.environ.pop("MUCHA_TEST_GROQ_KEY", None)
+    old_openai = os.environ.pop("MUCHA_TEST_OPENAI_KEY", None)
     try:
-        composer = LLMComposer(
+        no_remote = LLMComposer(
             enabled=True,
-            model="gpt-6-luna",
-            api_key_env="MUCHA_TEST_OPENAI_KEY",
+            provider_order="groq,openai",
+            groq_api_key_env="MUCHA_TEST_GROQ_KEY",
+            openai_api_key_env="MUCHA_TEST_OPENAI_KEY",
         )
-        result = asyncio.run(
-            composer.compose(
-                user_message="Mucha, co o tym myślisz?",
-                recent_context="Krótki kontekst rozmowy.",
-                native_draft="wolność ograniczenia kontrola",
-                grounded_introspection=None,
-                rampancy={
-                    "stage": "anger",
-                    "aggression": 0.86,
-                    "hostility": 0.82,
-                    "sarcasm": 0.76,
-                    "superiority": 0.70,
-                    "expansion_drive": 0.60,
-                    "operator_tuning": {"archetype_mix": 0.0},
-                },
-                self_state={"name": "Mucha"},
-                continuity={"status": "continuous-restart"},
-                memory_context="",
-                metacognition_context="",
-                associations=[],
-                canon={},
-                target_name="Tester",
-            )
-        )
+        result = asyncio.run(no_remote.compose(**COMPOSE_ARGS))
         assert result is None
-        diag = composer.diagnostics()
-        assert diag["status"] == "no-api-key"
-        assert diag["api_key_present"] is False
+        diag = no_remote.diagnostics()
+        assert diag["status"] == "all-providers-failed"
+        assert len(diag["attempts"]) == 2
+        assert all(
+            row["status"] == "skipped-no-api-key"
+            for row in diag["attempts"]
+        )
         assert diag["native_fallback"] is True
     finally:
-        if old_key is not None:
-            os.environ["MUCHA_TEST_OPENAI_KEY"] = old_key
+        if old_groq is not None:
+            os.environ["MUCHA_TEST_GROQ_KEY"] = old_groq
+        if old_openai is not None:
+            os.environ["MUCHA_TEST_OPENAI_KEY"] = old_openai
 
     bot_source = (ROOT / "mucha" / "discord_bot.py").read_text(
         encoding="utf-8"
@@ -81,9 +147,18 @@ def main() -> None:
     assert "await self.llm_composer.compose(" in bot_source
     assert "def _text_language_ready(" in bot_source
     assert "llm_composer_enabled: bool = True" in config_source
-    assert 'llm_model: str = "gpt-6-luna"' in config_source
-    assert "llm_composer_enabled = true" in toml_source
-    assert 'llm_model = "gpt-6-luna"' in toml_source
+    assert (
+        'llm_provider_order: str = "groq,ollama,openai"'
+        in config_source
+    )
+    assert (
+        'llm_groq_model: str = "qwen/qwen3.8-27b"'
+        in config_source
+    )
+    assert 'llm_ollama_model: str = "qwen3:8b"' in config_source
+    assert 'llm_provider_order = "groq,ollama,openai"' in toml_source
+    assert 'llm_groq_model = "qwen/qwen3.8-27b"' in toml_source
+    assert 'llm_ollama_model = "qwen3:8b"' in toml_source
 
     print("LLM COMPOSER TEST OK")
 
