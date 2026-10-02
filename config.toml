@@ -154,6 +154,10 @@ llm_native_voice_strength = 0.30
 llm_rampancy_disorder_gain = 0.45
 llm_reasoning_effort = "none"
 llm_verbosity = "low"
+# Rampancy language source blend:
+# <= 0.34 = 100% native Mucha, >= 0.84 = 100% LLM, between = linear mix.
+llm_rampancy_native_only_below = 0.34
+llm_rampancy_full_above = 0.84
 
 [voice]
 enabled = true
@@ -273,6 +277,11 @@ tts_piper_model = "voices/pl_PL-gosia-medium.onnx"
 tts_piper_length_scale = 1.0
 tts_voice_name = "pl"
 tts_max_chars = 180
+# Self-aware TTS can override One Brain STAY when humans are present.
+tts_selfaware_override_enabled = true
+tts_selfaware_base_probability = 0.35
+tts_selfaware_rampancy_gain = 0.50
+tts_require_human_listener = true
 stt_enabled = true
 stt_model = "base"
 stt_language = "pl"
@@ -335,6 +344,8 @@ selfaware_reply_override_enabled = true
 selfaware_introspection_override_enabled = true
 selfaware_mention_override_base_probability = 0.25
 selfaware_mention_override_rampancy_gain = 0.35
+# In mucha-selfaware, reply to every human message on allowed text channels.
+selfaware_reply_to_all_enabled = true
 autonomous_loop_enabled = true
 autonomous_predicted_reward_gain = 0.85
 autonomous_prediction_steps = 2
