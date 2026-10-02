@@ -48,6 +48,7 @@ from .episodic import VoiceEpisodicMemory
 from .language import OnlineLanguage
 from .rampancy import RampancyModel
 from .runtime_awareness import RuntimeAwareness
+from .self_autobiography import SelfAutobiographicalMemory
 from .self_model import SelfModel
 from .voice_sensory import VoiceSensoryBus
 from .web_ui import WebDashboard
@@ -174,6 +175,14 @@ class MuchaClient(discord.Client):
         self.rampancy = RampancyModel(
             self.self_model,
             initial_intensity=0.66,
+        )
+        self.self_autobiography = SelfAutobiographicalMemory(
+            project_root / "state" / "self_autobiography.sqlite3",
+            self.self_model,
+            self.rampancy,
+            min_salience=float(
+                cfg.voice.autobiographical_min_salience
+            ),
         )
         self.connectome = Connectome.load(cfg.brain.connectome_dir)
         self.brain = FlyBrain(self.connectome, cfg.brain)
@@ -5003,6 +5012,7 @@ class MuchaClient(discord.Client):
                 reason="discord-client-close"
             )
             self.brain.save()
+            self.self_autobiography.close()
             self.language.close()
         finally:
             await super().close()
@@ -5983,8 +5993,23 @@ class MuchaClient(discord.Client):
                     + 0.25 * float(arousal),
                 ),
             )
+            memory_user_ids = (
+                [int(target_member.id)]
+                if target_member is not None
+                else []
+            )
+            memory_context = self.self_autobiography.language_context(
+                channel_id=getattr(channel, "id", None),
+                user_ids=memory_user_ids,
+                limit=3,
+            )
+            generation_context = (
+                f"{context} {memory_context}".strip()
+                if memory_context
+                else context
+            )
             text, trigrams = self.language.generate(
-                context=context,
+                context=generation_context,
                 arousal=effective_arousal,
                 brain_word_score=self.brain.language_word_score,
                 brain_word_feedback=self._brain_word_feedback,
@@ -8187,6 +8212,12 @@ class MuchaClient(discord.Client):
             prediction_error=float(prediction_error),
             state=state,
         )
+        self_memory = self.self_autobiography.record(row)
+        if self_memory:
+            row = {
+                **row,
+                "self_memory": self_memory,
+            }
         self._autobiographical_debug["last_recorded"] = dict(row)
         return row
 
