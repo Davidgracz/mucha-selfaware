@@ -109,6 +109,7 @@ def main() -> None:
         directed_at_mucha=False,
         force_reply=True,
         disliked_user=True,
+        reply_cooldown_remaining=99.0,
     )
     assert reply_all["active"] is True
     assert reply_all["mode"] == "reply-to-all"
