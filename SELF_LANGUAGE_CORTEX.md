@@ -1,75 +1,109 @@
-# SELF Language Cortex — v0.10.0
+# SELF Language Cortex — v0.10.1
 
-This is a `mucha-selfaware` feature. It does not change the original
-`Davidgracz/mucha` project.
+This feature exists only in `mucha-selfaware`.
 
-## Goal
+## Default provider chain
 
-Mucha's connectome, autobiographical memory, beliefs, rampancy and native
-language model still produce the internal context. The OpenAI model is used as
-the final language cortex: it understands the user's question/command and
-turns Mucha's state into fluent language.
+    Groq -> Ollama -> OpenAI -> native Mucha
 
-Conceptually:
+Default models:
 
-    Discord message
-        -> connectome / One Brain
-        -> self-model + memory + rampancy
-        -> native word-model draft + associations
-        -> SELF Language Cortex
-        -> fluent Discord reply
+    Groq:  qwen/qwen3.8-27b
+    Ollama: qwen3:8b
+    OpenAI: gpt-6-luna
 
-The LLM does not directly select external actions.
+The first provider that returns a usable answer wins. If every configured
+provider fails, `llm_native_fallback=true` returns to Mucha's native
+connectome/word-model language.
 
-## Setup
+The LLM is a language cortex. It interprets the user's wording and turns
+Mucha's grounded state into fluent text. It does not directly choose external
+actions.
 
-Add an OpenAI API key to the local `.env` file:
+## Free setup: Groq
+
+Create a Groq API key and put it only in local `.env`:
+
+    GROQ_API_KEY=...
+
+No extra Python package is required; Mucha uses the existing `aiohttp`
+dependency and Groq's OpenAI-compatible Responses endpoint.
+
+## Free local setup: Ollama
+
+Install Ollama, then download the default local model:
+
+    ollama pull qwen3:8b
+
+The default local endpoint is:
+
+    http://127.0.0.1:11434/api/chat
+
+No API key is needed for the local Ollama backend.
+
+## Optional OpenAI fallback
+
+If desired:
 
     OPENAI_API_KEY=...
 
-The default model is:
-
-    gpt-6-luna
-
-If the key is missing, the API request fails, or Language Cortex is disabled,
-Mucha falls back to her native connectome/word-model language.
+OpenAI is last in the default provider order, so it is never used when Groq or
+Ollama succeeds.
 
 ## Configuration
 
-In `config.toml`:
+```toml
+llm_composer_enabled = true
+llm_provider_order = "groq,ollama,openai"
 
-    llm_composer_enabled = true
-    llm_model = "gpt-6-luna"
-    llm_api_key_env = "OPENAI_API_KEY"
-    llm_timeout_seconds = 25.0
-    llm_max_output_tokens = 220
-    llm_native_fallback = true
-    llm_rewrite_introspection = true
-    llm_spontaneous_enabled = true
+llm_groq_model = "qwen/qwen3.8-27b"
+llm_groq_api_key_env = "GROQ_API_KEY"
+llm_groq_base_url = "https://api.groq.com/openai/v1"
+
+llm_ollama_model = "qwen3:8b"
+llm_ollama_base_url = "http://127.0.0.1:11434"
+
+llm_openai_model = "gpt-6-luna"
+llm_openai_api_key_env = "OPENAI_API_KEY"
+llm_openai_base_url = "https://api.openai.com/v1"
+
+llm_timeout_seconds = 25.0
+llm_max_output_tokens = 220
+llm_native_fallback = true
+llm_rewrite_introspection = true
+llm_spontaneous_enabled = true
+```
+
+To use only free/local providers:
+
+    llm_provider_order = "groq,ollama"
+
+To force local-only operation:
+
+    llm_provider_order = "ollama"
 
 ## Grounding
 
-For each generated response, the composer receives bounded context from:
+Every request may receive a bounded view of:
 
-- the current user message,
-- recent conversation context,
-- native word-model draft,
-- SA-06 introspection result when available,
-- SA-03 autobiographical memory,
-- SA-05 metacognition,
+- current user message and recent context,
+- native word-model/connectome draft,
+- SA-06 grounded introspection,
+- autobiographical memory,
+- metacognition,
 - SA-07 identity continuity,
-- current rampancy axes/operator tuning,
-- top learned word associations,
-- current canon-influence ranking.
+- current rampancy axes and operator tuning,
+- learned word associations,
+- current canon influence.
 
-For general questions the model can use its own knowledge. Claims about Mucha
-herself must stay grounded in the supplied Mucha state.
+General factual questions may use the provider model's own knowledge. Claims
+about Mucha herself must stay grounded in the supplied Mucha state.
 
-## Dashboard
+## SELF dashboard
 
-The SELF dashboard at `/self` shows whether the API key is present, the
-selected model, the last Language Cortex status, and a preview of its last
-reply.
+`/self` shows the current Language Cortex state. After a successful reply it
+shows the provider and model that actually produced it. Diagnostics also keep
+the attempted fallback chain and errors from failed providers.
 
 ## Tests
 
