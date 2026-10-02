@@ -1,68 +1,92 @@
-# SELF Language Cortex — v0.10.1
+# SELF Language Cortex — v0.10.3
 
 This feature exists only in `mucha-selfaware`.
 
-## Default provider chain
+## Current mode
 
-    Groq -> Ollama -> native Mucha
+The default Language Cortex uses only the OpenAI Responses API:
 
-Default models:
+    OpenAI gpt-6-luna -> native Mucha fallback
 
-    Groq:  qwen/qwen3.8-27b
-    Ollama: qwen3:8b
-    OpenAI: gpt-6-luna
+No Groq or Ollama provider is selected by default. Their adapter code remains
+available for experiments, but `llm_provider_order = "openai"` means they are
+not contacted.
 
-The first provider that returns a usable answer wins. If every configured
-provider fails, `llm_native_fallback=true` returns to Mucha's native
-connectome/word-model language.
+If OpenAI is unavailable, the bot falls directly back to its native
+connectome/word-model generator.
 
-The LLM is a language cortex. It interprets the user's wording and turns
-Mucha's grounded state into fluent text. It does not directly choose external
-actions.
+## Goal
 
-## Free setup: Groq
+The OpenAI model is not meant to replace Mucha's internal state. It understands
+the user's question or command and verbalizes signals already produced by:
 
-Create a Groq API key and put it only in local `.env`:
+- connectome / One Brain,
+- rampancy,
+- self-model,
+- autobiography,
+- metacognition,
+- identity continuity,
+- learned word associations,
+- native word-model draft,
+- canon influence.
 
-    GROQ_API_KEY=...
+## Imperfect / old-Mucha voice
 
-No extra Python package is required; Mucha uses the existing `aiohttp`
-dependency and Groq's OpenAI-compatible Responses endpoint.
+Replies are intentionally not polished into normal assistant prose.
 
-## Free local setup: Ollama
+Two controls define how much native Mucha leaks into the final text:
 
-Install Ollama, then download the default local model:
+    llm_native_voice_strength = 0.30
+    llm_rampancy_disorder_gain = 0.45
 
-    ollama pull qwen3:8b
+The effective native voice is approximately:
 
-The default local endpoint is:
+    native_voice = 0.30 + rampancy * 0.45
 
-    http://127.0.0.1:11434/api/chat
+and is capped before becoming total nonsense.
 
-No API key is needed for the local Ollama backend.
+Examples:
 
-## Optional OpenAI fallback
+    rampancy 0.10 -> ~35% native voice
+    rampancy 0.66 -> ~60% native voice
+    rampancy 0.90 -> ~71% native voice
 
-If desired:
+At lower values replies are mostly fluent with an occasional strange phrase.
+At medium values they can contain clipped phrases, slightly crooked syntax,
+repeated motifs and association jumps. At high values they can become visibly
+fragmented and obsessive, but must remain understandable and still answer the
+user's actual question.
+
+The native draft is therefore not discarded. The model is told to preserve
+some of its wording, rhythm and motifs instead of merely extracting a clean
+semantic summary.
+
+## OpenAI response settings
+
+For the default `gpt-6-luna` model:
+
+    llm_reasoning_effort = "none"
+    llm_verbosity = "low"
+
+This keeps latency/cost down and reduces the tendency to turn every message into
+highly structured assistant-style prose.
+
+The request is sent through the Responses API using `instructions`,
+`input`, `max_output_tokens`, `reasoning.effort` and `text.verbosity`.
+
+## Setup
+
+In local `.env`:
 
     OPENAI_API_KEY=...
 
-OpenAI is not in the default provider order. To enable it manually, use:
-
-    llm_provider_order = "groq,ollama,openai"
+Do not commit the real key.
 
 ## Configuration
 
 ```toml
 llm_composer_enabled = true
-llm_provider_order = "groq,ollama"
-
-llm_groq_model = "qwen/qwen3.8-27b"
-llm_groq_api_key_env = "GROQ_API_KEY"
-llm_groq_base_url = "https://api.groq.com/openai/v1"
-
-llm_ollama_model = "qwen3:8b"
-llm_ollama_base_url = "http://127.0.0.1:11434"
+llm_provider_order = "openai"
 
 llm_openai_model = "gpt-6-luna"
 llm_openai_api_key_env = "OPENAI_API_KEY"
@@ -73,38 +97,24 @@ llm_max_output_tokens = 220
 llm_native_fallback = true
 llm_rewrite_introspection = true
 llm_spontaneous_enabled = true
+
+llm_native_voice_strength = 0.30
+llm_rampancy_disorder_gain = 0.45
+llm_reasoning_effort = "none"
+llm_verbosity = "low"
 ```
-
-To use only free/local providers:
-
-    llm_provider_order = "groq,ollama"
-
-To force local-only operation:
-
-    llm_provider_order = "ollama"
-
-## Grounding
-
-Every request may receive a bounded view of:
-
-- current user message and recent context,
-- native word-model/connectome draft,
-- SA-06 grounded introspection,
-- autobiographical memory,
-- metacognition,
-- SA-07 identity continuity,
-- current rampancy axes and operator tuning,
-- learned word associations,
-- current canon influence.
-
-General factual questions may use the provider model's own knowledge. Claims
-about Mucha herself must stay grounded in the supplied Mucha state.
 
 ## SELF dashboard
 
-`/self` shows the current Language Cortex state. After a successful reply it
-shows the provider and model that actually produced it. Diagnostics also keep
-the attempted fallback chain and errors from failed providers.
+`/self` shows the provider/model actually used, current Rampancy Tailor
+profile, archetype, tone and the effective `native_voice` percentage.
+
+Typical display at rampancy ~0.66:
+
+    Language Cortex: OK • OPENAI
+    Model: gpt-6-luna
+    Rampancy Tailor: hostile-defiant / anger
+    Stara Mucha / native voice: ~60% • mucha-fractured
 
 ## Tests
 
