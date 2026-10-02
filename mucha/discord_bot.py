@@ -660,6 +660,10 @@ class MuchaClient(discord.Client):
             "one_brain_enabled",
             "one_brain_predicted_reward_gain",
             "one_brain_prediction_steps",
+            "selfaware_reply_override_enabled",
+            "selfaware_introspection_override_enabled",
+            "selfaware_mention_override_base_probability",
+            "selfaware_mention_override_rampancy_gain",
             "autonomous_loop_enabled",
             "autonomous_predicted_reward_gain",
             "autonomous_prediction_steps",
@@ -5064,7 +5068,7 @@ class MuchaClient(discord.Client):
     def _selfaware_reply_override(
         self,
         *,
-        mentioned: bool,
+        directed_at_mucha: bool,
         introspection_response: str | None,
         blocked_text: bool,
         disliked_user: bool,
@@ -5098,8 +5102,8 @@ class MuchaClient(discord.Client):
         if neural_speak_selected:
             result["reason"] = "neural-speak-already-selected"
             return result
-        if not mentioned:
-            result["reason"] = "not-directly-mentioned"
+        if not directed_at_mucha:
+            result["reason"] = "not-directed-at-mucha"
             return result
         if blocked_text:
             result["reason"] = "blocked-text-channel"
@@ -5299,6 +5303,27 @@ class MuchaClient(discord.Client):
             and user_affinity <= float(self.cfg.behavior.user_avoid_threshold)
         )
         mentioned = self.user in message.mentions if self.user else False
+        reference_id = (
+            message.reference.message_id
+            if message.reference is not None
+            else None
+        )
+        referenced_self_trace = (
+            self.sent.get(reference_id)
+            if reference_id is not None
+            else None
+        )
+        normalized_target = OnlineLanguage.normalize(
+            message.content
+        ).strip().lower()
+        named_directly = bool(
+            re.match(r"^mucha\b", normalized_target, flags=re.UNICODE)
+        )
+        directed_at_mucha = bool(
+            mentioned
+            or referenced_self_trace is not None
+            or named_directly
+        )
         introspection_response = (
             self.introspection.answer(
                 message.content,
@@ -5315,7 +5340,7 @@ class MuchaClient(discord.Client):
                     )
                 ),
             )
-            if mentioned
+            if directed_at_mucha
             else None
         )
         channel_name = getattr(message.channel, "name", str(message.channel.id))
@@ -5751,7 +5776,7 @@ class MuchaClient(discord.Client):
             )
         )
         selfaware_reply_override = self._selfaware_reply_override(
-            mentioned=bool(mentioned),
+            directed_at_mucha=bool(directed_at_mucha),
             introspection_response=introspection_response,
             blocked_text=bool(blocked_text),
             disliked_user=bool(disliked_user),
@@ -5997,6 +6022,7 @@ class MuchaClient(discord.Client):
             "constraints": text_constraints,
             "signals": {
                 "mentioned": bool(mentioned),
+                "directed_at_mucha": bool(directed_at_mucha),
                 "affinity": float(user_affinity),
                 "blocked_text": bool(blocked_text),
                 "disliked_user": bool(disliked_user),
