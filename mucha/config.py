@@ -140,7 +140,7 @@ class LanguageConfig:
     coherence_min_score: float = 0.52
     coherence_attempts: int = 5
     llm_composer_enabled: bool = True
-    llm_provider_order: str = "groq,ollama,openai"
+    llm_provider_order: str = "groq,ollama"
     llm_groq_model: str = "qwen/qwen3.8-27b"
     llm_groq_api_key_env: str = "GROQ_API_KEY"
     llm_groq_base_url: str = "https://api.groq.com/openai/v1"
