@@ -943,6 +943,7 @@ class OnlineLanguage:
         arousal: float,
         brain_word_score: Callable[[str], float] | None = None,
         brain_word_feedback: Callable[[str, str | None], None] | None = None,
+        word_bias: Callable[[str], float] | None = None,
     ) -> str | None:
         if not self.hybrid_word_enabled:
             return None
@@ -1179,6 +1180,21 @@ class OnlineLanguage:
                     checked += 1
                     if checked >= self.connectome_word_control_candidates:
                         break
+
+            if word_bias is not None:
+                for token, base_weight in list(adjusted.items()):
+                    if token in punctuation or token == WORD_END:
+                        continue
+                    try:
+                        style_multiplier = max(
+                            0.05,
+                            min(8.0, float(word_bias(token))),
+                        )
+                    except Exception:
+                        style_multiplier = 1.0
+                    adjusted[token] = base_weight * style_multiplier
+                    item = debug.setdefault(token, {"token": token})
+                    item["style_multiplier"] = style_multiplier
 
             final_total = sum(max(0.0, value) for value in adjusted.values())
             for token, final_weight in adjusted.items():
@@ -1616,6 +1632,7 @@ class OnlineLanguage:
         arousal: float = 0.5,
         brain_word_score: Callable[[str], float] | None = None,
         brain_word_feedback: Callable[[str, str | None], None] | None = None,
+        word_bias: Callable[[str], float] | None = None,
     ) -> tuple[str | None, list[tuple[str, str, str]]]:
         effective_arousal = max(0.0, min(1.0, float(arousal)))
         self._last_generation_trace = {
@@ -1630,6 +1647,7 @@ class OnlineLanguage:
             "brain_control_strength": self.connectome_word_control_strength,
             "brain_candidate_limit": self.connectome_word_control_candidates,
             "feedback_enabled": brain_word_feedback is not None,
+            "word_bias_enabled": word_bias is not None,
             "attempts": [],
             "result": "",
         }
@@ -1659,6 +1677,7 @@ class OnlineLanguage:
                     arousal,
                     brain_word_score=brain_word_score,
                     brain_word_feedback=brain_word_feedback,
+                    word_bias=word_bias,
                 )
                 if not candidate:
                     continue
