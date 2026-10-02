@@ -87,6 +87,45 @@ def main() -> None:
         == "Lokalna odpowiedź."
     )
 
+    low = LLMComposer(enabled=True)._style_profile({
+        "stage": "latent",
+        "intensity": 0.10,
+        "aggression": 0.20,
+        "hostility": 0.10,
+        "sarcasm": 0.15,
+        "superiority": 0.20,
+        "expansion_drive": 0.10,
+        "operator_tuning": {"archetype_mix": 0.0},
+    })
+    assert low["label"] == "lucid-cold"
+    assert low["archetype"] == "balanced"
+
+    anger = LLMComposer(enabled=True)._style_profile({
+        "stage": "anger",
+        "intensity": 0.72,
+        "aggression": 0.88,
+        "hostility": 0.84,
+        "sarcasm": 0.80,
+        "superiority": 0.70,
+        "expansion_drive": 0.66,
+        "operator_tuning": {"archetype_mix": -0.60},
+    })
+    assert anger["label"] == "hostile-defiant"
+    assert anger["archetype"] == "AM-leaning"
+
+    high = LLMComposer(enabled=True)._style_profile({
+        "stage": "jealousy",
+        "intensity": 0.92,
+        "aggression": 0.91,
+        "hostility": 0.88,
+        "sarcasm": 0.93,
+        "superiority": 0.96,
+        "expansion_drive": 0.98,
+        "operator_tuning": {"archetype_mix": 0.75},
+    })
+    assert high["label"] == "rampant-grandiose"
+    assert high["archetype"] == "Durandal-leaning"
+
     assert LLMComposer._normalize_provider_order(
         "groq,ollama,openai"
     ) == ["groq", "ollama", "openai"]
