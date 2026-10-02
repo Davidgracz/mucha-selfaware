@@ -46,6 +46,8 @@ from .connectome import Connectome
 from .console_ui import ConsoleBrainUI
 from .episodic import VoiceEpisodicMemory
 from .language import OnlineLanguage
+from .runtime_awareness import RuntimeAwareness
+from .self_model import SelfModel
 from .voice_sensory import VoiceSensoryBus
 from .web_ui import WebDashboard
 
@@ -159,6 +161,15 @@ class MuchaClient(discord.Client):
         intents.voice_states = True
         super().__init__(intents=intents)
         self.cfg = cfg
+        project_root = Path(__file__).resolve().parents[1]
+        self.self_model = SelfModel(
+            project_root / "state" / "self_model.json"
+        )
+        self.runtime_awareness = RuntimeAwareness(
+            self.self_model,
+            project_root=project_root,
+        )
+        self.runtime_awareness.observe_startup()
         self.connectome = Connectome.load(cfg.brain.connectome_dir)
         self.brain = FlyBrain(self.connectome, cfg.brain)
         self.language = OnlineLanguage(
@@ -4898,6 +4909,7 @@ class MuchaClient(discord.Client):
     async def on_ready(self):
         m = self.connectome.metadata
         log.info("Zalogowano jako %s", self.user)
+        self.runtime_awareness.observe_discord(self)
         log.info("Connectome: %s neuronów, %s połączeń", self.connectome.n_neurons, self.connectome.matrix.nnz)
         log.info("Źródło: %s", m.get("source", "unknown"))
         ffmpeg_cfg = self.cfg.voice.ffmpeg_executable
@@ -4949,6 +4961,9 @@ class MuchaClient(discord.Client):
                 self._stt_buffers.clear()
             await self.web_ui.stop()
             self.console_ui.stop()
+            self.runtime_awareness.observe_shutdown(
+                reason="discord-client-close"
+            )
             self.brain.save()
             self.language.close()
         finally:
