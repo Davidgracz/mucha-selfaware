@@ -26,6 +26,11 @@ consciousness.
   - negative outcomes, harassment, threats and blocks escalate rampancy
   - known language-model words receive stage-dependent style bias
   - no canned Marathon dialogue and no direct action override
+- [x] **SA-02.6 — Rampancy Language Seed**
+  - original project-owned existential/hostile seed corpus
+  - one-time corpus bootstrap into the online language model
+  - optional untracked local corpus for user-supplied/licensed dialogue
+  - corpus digest tracking prevents duplicate import on restart
 - [ ] **SA-03 — Autobiographical Memory**
   - important self-relevant episodes
   - actor, place, goal, intent, internal state, outcome and reward
