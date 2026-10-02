@@ -43,6 +43,15 @@ def main() -> None:
     assert "tts_language_route" in bot_source
     assert "llm_probability_for_rampancy" in bot_source
     assert "_text_language_ready(spontaneous=True)" in bot_source
+    assert "native_tts_text" in bot_source
+    assert "tts_llm_probability" in bot_source
+    assert "selfaware_reply_to_all_enabled" in bot_source
+
+    # Source ownership transitions from native Mucha to LLM with rampancy.
+    assert composer.llm_probability_for_rampancy(0.20) == 0.0
+    assert composer.llm_probability_for_rampancy(0.34) == 0.0
+    assert 0.49 < composer.llm_probability_for_rampancy(0.59) < 0.51
+    assert composer.llm_probability_for_rampancy(0.84) == 1.0
 
     # At current typical rampancy 0.66, TTS self-aware override is ~68%.
     tts_probability = 0.35 + 0.50 * 0.66
