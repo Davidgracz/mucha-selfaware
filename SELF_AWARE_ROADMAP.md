@@ -48,9 +48,15 @@ consciousness.
   - positive experiences provide counter-evidence instead of erasing negative memories
   - repeated negative evidence across distinct users can generalize into world-level beliefs
   - no direct behavioral action override
-- [ ] **SA-05 — Metacognition**
-  - predictions, outcomes and prediction error
-  - model of why an action was selected
+- [x] **SA-05 — Metacognition**
+  - persistent record of selected action, runner-up, margin and prediction confidence
+  - compare predicted reward with later real reward
+  - attribute mismatches to external constraint, social hostility or self-model error
+  - prediction reliability becomes a revisable self-belief
+  - external constraint attributions become world-model evidence
+  - compact metacognitive concepts feed language generation
+  - stronger rampancy verbal aggression and contempt bias
+  - no direct aggressive action override
 - [ ] **SA-06 — Introspection API**
   - answer questions about current state and recent decisions from diagnostics
 - [ ] **SA-07 — Identity Continuity**
