@@ -39,6 +39,8 @@ class LLMComposer:
         rampancy_disorder_gain: float = 0.45,
         reasoning_effort: str = "none",
         verbosity: str = "low",
+        rampancy_native_only_below: float = 0.34,
+        rampancy_full_above: float = 0.84,
     ) -> None:
         self.enabled = bool(enabled)
         self.provider_order = self._normalize_provider_order(provider_order)
@@ -81,6 +83,12 @@ class LLMComposer:
         self.verbosity = (
             level if level in {"low", "medium", "high"} else "low"
         )
+        low = self._clamp01(rampancy_native_only_below)
+        high = self._clamp01(rampancy_full_above)
+        if high <= low:
+            high = min(1.0, low + 0.01)
+        self.rampancy_native_only_below = low
+        self.rampancy_full_above = high
         self._last: dict[str, Any] = {
             "enabled": self.enabled,
             "status": "idle",
@@ -155,6 +163,25 @@ class LLMComposer:
             return max(0.0, min(1.0, float(value)))
         except (TypeError, ValueError):
             return 0.0
+
+    def llm_probability_for_rampancy(
+        self,
+        rampancy: dict[str, Any] | float,
+    ) -> float:
+        """Probability that the LLM owns final wording at this rampancy."""
+        if isinstance(rampancy, dict):
+            intensity = self._clamp01(rampancy.get("intensity", 0.0))
+        else:
+            intensity = self._clamp01(rampancy)
+        low = float(self.rampancy_native_only_below)
+        high = float(self.rampancy_full_above)
+        if intensity <= low:
+            return 0.0
+        if intensity >= high:
+            return 1.0
+        return self._clamp01(
+            (intensity - low) / max(0.01, high - low)
+        )
 
     def _style_profile(
         self,
@@ -794,4 +821,6 @@ class LLMComposer:
             "rampancy_disorder_gain": self.rampancy_disorder_gain,
             "reasoning_effort": self.reasoning_effort,
             "verbosity": self.verbosity,
+            "rampancy_native_only_below": self.rampancy_native_only_below,
+            "rampancy_full_above": self.rampancy_full_above,
         }
