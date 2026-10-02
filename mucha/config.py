@@ -482,6 +482,15 @@ def load_config(path: str | Path = "config.toml") -> Config:
         )
     else:
         l.pop("max_generated_tokens", None)
+
+    # Backward compatibility with v0.10.0 single-provider Language Cortex.
+    legacy_llm_model = l.pop("llm_model", None)
+    legacy_llm_key_env = l.pop("llm_api_key_env", None)
+    if legacy_llm_model and "llm_openai_model" not in l:
+        l["llm_openai_model"] = str(legacy_llm_model)
+    if legacy_llm_key_env and "llm_openai_api_key_env" not in l:
+        l["llm_openai_api_key_env"] = str(legacy_llm_key_env)
+
     v = dict(raw["voice"])
     if "blocked_voice_channel_ids" in v:
         v["blocked_voice_channel_ids"] = tuple(
