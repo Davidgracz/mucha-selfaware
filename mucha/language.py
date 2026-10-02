@@ -54,6 +54,10 @@ class OnlineLanguage:
         connectome_word_control_min_vocab: int = 1500,
         connectome_word_control_strength: float = 0.35,
         connectome_word_control_candidates: int = 24,
+        coherence_enabled: bool = True,
+        coherence_strength: float = 0.82,
+        coherence_min_score: float = 0.52,
+        coherence_attempts: int = 5,
     ):
         self.path = Path(db_path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -109,6 +113,19 @@ class OnlineLanguage:
         self.connectome_word_control_candidates = max(
             4,
             min(96, int(connectome_word_control_candidates)),
+        )
+        self.coherence_enabled = bool(coherence_enabled)
+        self.coherence_strength = max(
+            0.0,
+            min(1.0, float(coherence_strength)),
+        )
+        self.coherence_min_score = max(
+            0.0,
+            min(1.0, float(coherence_min_score)),
+        )
+        self.coherence_attempts = max(
+            1,
+            min(12, int(coherence_attempts)),
         )
         self._brain_word_control_last: dict = {
             "active": False,
@@ -773,6 +790,10 @@ class OnlineLanguage:
             "last_generator": self._last_generator,
             "word_model_probability": self.word_model_probability,
             "word_recent_boost": self.word_recent_boost,
+            "coherence_enabled": self.coherence_enabled,
+            "coherence_strength": self.coherence_strength,
+            "coherence_min_score": self.coherence_min_score,
+            "coherence_attempts": self.coherence_attempts,
             "connectome_word_control_enabled": (
                 self.connectome_word_control_enabled
             ),
@@ -1395,31 +1416,53 @@ class OnlineLanguage:
             bigram_rows: list[tuple],
             generated_tokens: int,
         ) -> tuple[float, float, float]:
-            # Calm state follows grammar more closely; exploration deliberately
-            # backs off to shorter history so separate learned phrases can cross.
-            tri = 0.55 - 0.25 * arousal
-            bi = 0.30 + 0.05 * arousal
-            uni = 1.0 - tri - bi
+            if self.coherence_enabled:
+                # Self-Aware favors locally learned syntax. Arousal may loosen
+                # the sentence, but unigram jumps stay a minority source.
+                strength = self.coherence_strength
+                tri = 0.52 + 0.30 * strength - 0.08 * arousal
+                bi = 0.30 - 0.06 * strength + 0.03 * arousal
+                uni = max(0.04, 1.0 - tri - bi)
 
-            # A single known continuation is effectively memorized text. Reduce
-            # its authority so the model gets a real chance to invent a branch.
-            if len(trigram_rows) <= 1:
-                moved = tri * 0.55
-                tri -= moved
-                bi += moved * 0.55
-                uni += moved * 0.45
-            if len(bigram_rows) <= 1:
-                moved = bi * 0.25
-                bi -= moved
-                uni += moved
+                # Sparse continuations are allowed to remain authoritative.
+                # Only a small part is moved to backoff, instead of destroying
+                # the grammatical chain as the older exploratory mode did.
+                if len(trigram_rows) <= 1:
+                    moved = tri * (0.08 + 0.10 * (1.0 - strength))
+                    tri -= moved
+                    bi += moved * 0.75
+                    uni += moved * 0.25
+                if len(bigram_rows) <= 1:
+                    moved = bi * 0.08
+                    bi -= moved
+                    uni += moved
 
-            # The longer one exact path survives, the more strongly we invite a
-            # backoff. This prevents long verbatim runs through training text.
-            if generated_tokens >= 3:
-                moved = min(tri * 0.45, 0.04 * generated_tokens)
-                tri -= moved
-                bi += moved * 0.45
-                uni += moved * 0.55
+                # Mild novelty pressure after several words; this preserves
+                # coherence without turning generation into exact replay.
+                if generated_tokens >= 6:
+                    moved = min(tri * 0.10, 0.012 * generated_tokens)
+                    tri -= moved
+                    bi += moved * 0.80
+                    uni += moved * 0.20
+            else:
+                # Legacy exploratory mix.
+                tri = 0.55 - 0.25 * arousal
+                bi = 0.30 + 0.05 * arousal
+                uni = 1.0 - tri - bi
+                if len(trigram_rows) <= 1:
+                    moved = tri * 0.55
+                    tri -= moved
+                    bi += moved * 0.55
+                    uni += moved * 0.45
+                if len(bigram_rows) <= 1:
+                    moved = bi * 0.25
+                    bi -= moved
+                    uni += moved
+                if generated_tokens >= 3:
+                    moved = min(tri * 0.45, 0.04 * generated_tokens)
+                    tri -= moved
+                    bi += moved * 0.45
+                    uni += moved * 0.55
 
             total = tri + bi + uni
             if total <= 0.0:
@@ -1667,16 +1710,25 @@ class OnlineLanguage:
                 for item in out
                 if item not in punctuation
             )
-            if (
-                token in {".", "!", "?"}
-                and lexical >= 4
-                and self.rng.random() < 0.90
-            ):
+            if token in {".", "!", "?"} and lexical >= 4:
+                # Never start a second half-baked sentence in the same output.
                 break
 
         text = self._format_word_tokens(out)
         if len(text) < 3:
             return None
+
+        lexical_count = len([
+            token
+            for token in self.words(text)
+            if token not in punctuation
+        ])
+        if (
+            self.coherence_enabled
+            and lexical_count >= 4
+            and text[-1:] not in ".!?"
+        ):
+            text = text.rstrip(" ,;:") + "."
 
         if len(text) > self.max_chars:
             text = text[: self.max_chars]
@@ -1707,6 +1759,61 @@ class OnlineLanguage:
         )
         attempt_trace["feedback_words"] = brain_feedback_words
         return text
+
+    def _coherence_score(self, text: str) -> float:
+        """Score observable local language coherence from learned transitions.
+
+        This is not semantic understanding or an LLM judge. It rewards word
+        sequences that are supported by the bot's own learned bigrams/trigrams
+        and penalizes abrupt unigram jumps and repetition.
+        """
+        punctuation = {".", "!", "?", ",", ";", ":"}
+        tokens = self.words(text)
+        lexical = [x for x in tokens if x not in punctuation]
+        if len(lexical) < 2:
+            return 0.0
+
+        bigrams = list(zip(lexical, lexical[1:]))
+        trigrams = list(zip(lexical, lexical[1:], lexical[2:]))
+
+        bigram_hits = 0
+        for a, b in bigrams:
+            row = self.db.execute(
+                "SELECT n FROM word_bigram WHERE a=? AND b=?",
+                (a, b),
+            ).fetchone()
+            if row and int(row[0]) > 0:
+                bigram_hits += 1
+
+        trigram_hits = 0
+        for a, b, c in trigrams:
+            row = self.db.execute(
+                "SELECT n FROM word_trigram WHERE a=? AND b=? AND c=?",
+                (a, b, c),
+            ).fetchone()
+            if row and int(row[0]) > 0:
+                trigram_hits += 1
+
+        bi_ratio = bigram_hits / max(1, len(bigrams))
+        tri_ratio = (
+            trigram_hits / max(1, len(trigrams))
+            if trigrams else bi_ratio
+        )
+
+        unique_ratio = len(set(lexical)) / max(1, len(lexical))
+        repetition = max(0.0, 1.0 - unique_ratio)
+        terminal = 1.0 if str(text).rstrip().endswith((".", "!", "?")) else 0.0
+
+        # Strongly prefer supported local syntax while still allowing one or
+        # two novel transitions.
+        score = (
+            0.52 * bi_ratio
+            + 0.32 * tri_ratio
+            + 0.10 * unique_ratio
+            + 0.06 * terminal
+            - 0.18 * repetition
+        )
+        return max(0.0, min(1.0, score))
 
     def _word_output_too_close_to_context(
         self,
@@ -1790,7 +1897,14 @@ class OnlineLanguage:
             and word_roll < self.word_model_probability
         ):
             word_text = None
-            for attempt in range(4):
+            best_candidate = None
+            best_score = -1.0
+            attempts = (
+                self.coherence_attempts
+                if self.coherence_enabled
+                else 4
+            )
+            for attempt in range(attempts):
                 candidate = self._generate_words(
                     context,
                     arousal,
@@ -1800,26 +1914,56 @@ class OnlineLanguage:
                 )
                 if not candidate:
                     continue
-                word_text = candidate
+
                 too_close = self._word_output_too_close_to_context(
                     candidate,
                     context,
                 )
+                coherence_score = self._coherence_score(candidate)
                 current_attempt = (
                     self._last_generation_trace.get("attempts", [])[-1]
                     if self._last_generation_trace.get("attempts")
                     else None
                 )
-                if current_attempt is not None and too_close and attempt < 3:
-                    current_attempt["rejected_reason"] = (
-                        "too-close-to-context"
-                    )
-                    word_text = None
-                    continue
-                if attempt >= 3 or not too_close:
+                if current_attempt is not None:
+                    current_attempt["coherence_score"] = coherence_score
+
+                if not too_close and coherence_score > best_score:
+                    best_candidate = candidate
+                    best_score = coherence_score
+
+                if too_close and attempt < attempts - 1:
                     if current_attempt is not None:
-                        current_attempt["accepted"] = True
-                    break
+                        current_attempt["rejected_reason"] = (
+                            "too-close-to-context"
+                        )
+                    continue
+
+                if (
+                    self.coherence_enabled
+                    and coherence_score < self.coherence_min_score
+                    and attempt < attempts - 1
+                ):
+                    if current_attempt is not None:
+                        current_attempt["rejected_reason"] = (
+                            "low-coherence"
+                        )
+                    continue
+
+                word_text = candidate
+                if current_attempt is not None:
+                    current_attempt["accepted"] = True
+                break
+
+            if word_text is None and best_candidate is not None:
+                word_text = best_candidate
+                for item in reversed(
+                    self._last_generation_trace.get("attempts", [])
+                ):
+                    if item.get("result") == best_candidate:
+                        item["accepted"] = True
+                        item["accepted_reason"] = "best-available-coherence"
+                        break
             if word_text:
                 self._last_generator = "words"
                 self._last_generation_trace.update({
