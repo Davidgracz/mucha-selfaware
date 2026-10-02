@@ -15,3 +15,5 @@ raw_flywire/
 
 # VPS/dashboard runtime overrides
 config.local.toml
+
+state/
