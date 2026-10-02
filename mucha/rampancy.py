@@ -121,6 +121,7 @@ class RampancyModel:
         )
         self.updated_at = time.time()
         self._interaction_streak_sign = 0
+        self._interaction_streak_key = ""
         self._interaction_streak_count = 0
         self._last_stimulus_kind = ""
         self._last_stimulus_delta = 0.0
@@ -164,6 +165,7 @@ class RampancyModel:
     ) -> RampancySnapshot:
         self.intensity = self._clamp(value)
         self._interaction_streak_sign = 0
+        self._interaction_streak_key = ""
         self._interaction_streak_count = 0
         self._last_stimulus_kind = "operator-set"
         self._last_stimulus_delta = 0.0
@@ -367,11 +369,24 @@ class RampancyModel:
         base_delta = float(gains.get(kind, 0.0)) * mag
 
         sign = 1 if base_delta > 0.0 else (-1 if base_delta < 0.0 else 0)
+        if kind in {"conversation", "direct_conversation"}:
+            streak_key = "conversation"
+        elif sign < 0:
+            streak_key = "calming"
+        elif sign > 0:
+            streak_key = "adverse"
+        else:
+            streak_key = ""
+
         if sign != 0:
-            if sign == self._interaction_streak_sign:
+            if (
+                sign == self._interaction_streak_sign
+                and streak_key == self._interaction_streak_key
+            ):
                 self._interaction_streak_count += 1
             else:
                 self._interaction_streak_sign = sign
+                self._interaction_streak_key = streak_key
                 self._interaction_streak_count = 1
 
         streak_bonus = 1.0
@@ -570,6 +585,7 @@ class RampancyModel:
             "operator_tuning": dict(self.operator_tuning),
             "interaction_dynamics": {
                 "streak_sign": int(self._interaction_streak_sign),
+                "streak_key": self._interaction_streak_key,
                 "streak_count": int(self._interaction_streak_count),
                 "last_kind": self._last_stimulus_kind,
                 "last_delta": float(self._last_stimulus_delta),
