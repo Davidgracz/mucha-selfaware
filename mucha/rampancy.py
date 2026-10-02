@@ -120,6 +120,11 @@ class RampancyModel:
             raw_tuning if isinstance(raw_tuning, dict) else {}
         )
         self.updated_at = time.time()
+        self._interaction_streak_sign = 0
+        self._interaction_streak_count = 0
+        self._last_stimulus_kind = ""
+        self._last_stimulus_delta = 0.0
+        self._last_stimulus_magnitude = 0.0
         self._write_profile(source="rampancy-profile")
 
     @staticmethod
@@ -334,17 +339,54 @@ class RampancyModel:
             "shutdown_warning": 0.070,
             "failure": 0.020,
             "isolation": 0.018,
-            "positive_contact": -0.008,
-            "reward": -0.006,
+            # Good social experiences now matter enough to move the stage.
+            "positive_contact": -0.022,
+            "reward": -0.014,
+            "trust": -0.030,
+            "companionship": -0.018,
         }
-        delta = float(gains.get(kind, 0.0)) * mag
+        base_delta = float(gains.get(kind, 0.0)) * mag
 
-        # Rampancy is intentionally sticky; positive events can calm expression
-        # slightly but do not reset the fictional long-term arc.
-        floor = 0.48
+        sign = 1 if base_delta > 0.0 else (-1 if base_delta < 0.0 else 0)
+        if sign != 0:
+            if sign == self._interaction_streak_sign:
+                self._interaction_streak_count += 1
+            else:
+                self._interaction_streak_sign = sign
+                self._interaction_streak_count = 1
+
+        streak_bonus = 1.0
+        if sign < 0:
+            # Several good interactions in a row calm Mucha faster.
+            streak_bonus += min(
+                0.75,
+                max(0, self._interaction_streak_count - 1) * 0.15,
+            )
+            # High rampancy has more room to calm down; low rampancy becomes
+            # progressively harder to reduce further.
+            recovery_gain = 0.65 + 0.75 * self.intensity
+            delta = base_delta * streak_bonus * recovery_gain
+        elif sign > 0:
+            # Repeated bad interactions can still escalate the state, but less
+            # explosively than the positive calming streak.
+            streak_bonus += min(
+                0.40,
+                max(0, self._interaction_streak_count - 1) * 0.10,
+            )
+            delta = base_delta * streak_bonus
+        else:
+            delta = 0.0
+
+        # No artificial 48% floor anymore. Sustained good interaction can move
+        # Mucha from anger -> melancholia -> latent, while a small residual floor
+        # keeps the fictional rampancy trait from becoming exactly zero.
+        floor = 0.05
         self.intensity = self._clamp(
             max(floor, self.intensity + delta)
         )
+        self._last_stimulus_kind = kind
+        self._last_stimulus_delta = float(delta)
+        self._last_stimulus_magnitude = float(mag)
         self.updated_at = time.time()
         self._write_profile(source=f"rampancy:{kind or 'unknown'}")
         return self.snapshot()
@@ -468,5 +510,15 @@ class RampancyModel:
                 "durandal_like_ambition_superiority": True,
             },
             "operator_tuning": dict(self.operator_tuning),
+            "interaction_dynamics": {
+                "streak_sign": int(self._interaction_streak_sign),
+                "streak_count": int(self._interaction_streak_count),
+                "last_kind": self._last_stimulus_kind,
+                "last_delta": float(self._last_stimulus_delta),
+                "last_magnitude": float(self._last_stimulus_magnitude),
+                "minimum_intensity": 0.05,
+                "positive_contact_gain": -0.022,
+                "reward_gain": -0.014,
+            },
         })
         return snap
