@@ -5393,9 +5393,6 @@ class MuchaClient(discord.Client):
         if blocked_text:
             result["reason"] = "blocked-text-channel"
             return result
-        if reply_cooldown_remaining > 0.0:
-            result["reason"] = "reply-cooldown"
-            return result
 
         if force_reply:
             if not language_ready and not introspection_response:
@@ -5408,6 +5405,10 @@ class MuchaClient(discord.Client):
                 "probability": 1.0,
                 "roll": 0.0,
             })
+            return result
+
+        if reply_cooldown_remaining > 0.0:
+            result["reason"] = "reply-cooldown"
             return result
 
         if disliked_user:
@@ -6169,7 +6170,7 @@ class MuchaClient(discord.Client):
                     else "legacy speak gate nie przeszedł progu"
                 )
             )
-        if reply_cooldown_remaining > 0.0:
+        if reply_cooldown_remaining > 0.0 and not reply_to_all:
             text_constraints.append(
                 f"reply cooldown {reply_cooldown_remaining:.1f}s"
             )
