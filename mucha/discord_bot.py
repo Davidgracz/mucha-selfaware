@@ -2336,14 +2336,21 @@ class MuchaClient(discord.Client):
                 min(1.0, abs(reward_value)),
             )
         elif reward_value > 0.0:
-            self.rampancy.register_stimulus(
-                "positive_contact"
-                if (
-                    "reply" in source_lower
-                    or "reaction" in source_lower
-                    or "social" in source_lower
+            social_positive = any(
+                marker in source_lower
+                for marker in (
+                    "reply",
+                    "reaction",
+                    "social",
+                    "discord",
+                    "conversation",
+                    "mention",
+                    "word reuse",
+                    "phrase reuse",
                 )
-                else "reward",
+            )
+            self.rampancy.register_stimulus(
+                "positive_contact" if social_positive else "reward",
                 min(1.0, reward_value),
             )
 
