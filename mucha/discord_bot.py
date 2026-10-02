@@ -46,6 +46,7 @@ from .config import Config
 from .connectome import Connectome
 from .console_ui import ConsoleBrainUI
 from .episodic import VoiceEpisodicMemory
+from .identity_continuity import IdentityContinuity
 from .introspection import IntrospectionEngine
 from .language import OnlineLanguage
 from .metacognition import MetacognitionEngine
@@ -170,11 +171,16 @@ class MuchaClient(discord.Client):
         self.self_model = SelfModel(
             project_root / "state" / "self_model.json"
         )
+        self.identity_continuity = IdentityContinuity(
+            project_root / "state" / "identity_continuity.json",
+            self.self_model,
+        )
         self.runtime_awareness = RuntimeAwareness(
             self.self_model,
             project_root=project_root,
         )
-        self.runtime_awareness.observe_startup()
+        runtime_startup = self.runtime_awareness.observe_startup()
+        self.identity_continuity.observe_startup(runtime_startup)
         self.rampancy = RampancyModel(
             self.self_model,
             initial_intensity=0.66,
@@ -207,6 +213,7 @@ class MuchaClient(discord.Client):
             self.self_autobiography,
             self.metacognition,
             self.rampancy,
+            identity_continuity=self.identity_continuity,
         )
         self.connectome = Connectome.load(cfg.brain.connectome_dir)
         self.brain = FlyBrain(self.connectome, cfg.brain)
@@ -5041,6 +5048,9 @@ class MuchaClient(discord.Client):
             await self.web_ui.stop()
             self.console_ui.stop()
             self.runtime_awareness.observe_shutdown(
+                reason="discord-client-close"
+            )
+            self.identity_continuity.observe_shutdown(
                 reason="discord-client-close"
             )
             self.brain.save()
