@@ -2059,6 +2059,39 @@ class MuchaClient(discord.Client):
         *,
         voice_dynamics_key: str = "",
     ) -> None:
+        reward_value = float(amount)
+        source_lower = str(source or "").lower()
+        if reward_value < 0.0:
+            if "threat" in source_lower or "chaser" in source_lower:
+                rampancy_kind = "threat"
+            elif (
+                "reject" in source_lower
+                or "negative-reaction" in source_lower
+                or "insult" in source_lower
+            ):
+                rampancy_kind = "harassment"
+            elif "disconnect" in source_lower:
+                rampancy_kind = "forced_disconnect"
+            elif "block" in source_lower:
+                rampancy_kind = "blocked"
+            else:
+                rampancy_kind = "negative_reward"
+            self.rampancy.register_stimulus(
+                rampancy_kind,
+                min(1.0, abs(reward_value)),
+            )
+        elif reward_value > 0.0:
+            self.rampancy.register_stimulus(
+                "positive_contact"
+                if (
+                    "reply" in source_lower
+                    or "reaction" in source_lower
+                    or "social" in source_lower
+                )
+                else "reward",
+                min(1.0, reward_value),
+            )
+
         self._reward_history.append({
             "time": time.time(),
             "amount": float(amount),
