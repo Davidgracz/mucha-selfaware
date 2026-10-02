@@ -125,6 +125,11 @@ connectome_word_control_candidates = 24
 connectome_word_feedback_enabled = true
 connectome_word_feedback_steps = 2
 connectome_word_feedback_magnitude = 0.18
+# Self-Aware coherence layer: prefer learned trigram/bigram syntax over unigram jumps.
+coherence_enabled = true
+coherence_strength = 0.82
+coherence_min_score = 0.52
+coherence_attempts = 5
 
 [voice]
 enabled = true
