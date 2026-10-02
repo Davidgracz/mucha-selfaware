@@ -112,12 +112,86 @@ class RampancyModel:
         except (TypeError, ValueError):
             value = float(initial_intensity)
         self.intensity = self._clamp(value)
+        raw_tuning = self_model.identity.get(
+            "rampancy_operator_tuning",
+            {},
+        )
+        self.operator_tuning = self._normalize_tuning(
+            raw_tuning if isinstance(raw_tuning, dict) else {}
+        )
         self.updated_at = time.time()
         self._write_profile(source="rampancy-profile")
 
     @staticmethod
     def _clamp(value: float) -> float:
         return max(0.0, min(1.0, float(value)))
+
+    @staticmethod
+    def _signed(value: float, limit: float = 0.50) -> float:
+        return max(-limit, min(limit, float(value)))
+
+    @classmethod
+    def _normalize_tuning(cls, raw: dict[str, Any]) -> dict[str, float]:
+        axes = (
+            "aggression",
+            "hostility",
+            "cruelty_style",
+            "sarcasm",
+            "manipulativeness",
+            "superiority",
+            "expansion_drive",
+        )
+        tuning = {
+            axis: cls._signed(raw.get(axis, 0.0))
+            for axis in axes
+        }
+        tuning["archetype_mix"] = max(
+            -1.0,
+            min(1.0, float(raw.get("archetype_mix", 0.0))),
+        )
+        return tuning
+
+    def set_intensity(
+        self,
+        value: float,
+        *,
+        source: str = "operator-ui",
+    ) -> RampancySnapshot:
+        self.intensity = self._clamp(value)
+        self.updated_at = time.time()
+        self._write_profile(source=source)
+        return self.snapshot()
+
+    def set_operator_tuning(
+        self,
+        values: dict[str, Any],
+        *,
+        source: str = "operator-ui",
+    ) -> RampancySnapshot:
+        merged = dict(self.operator_tuning)
+        merged.update(dict(values or {}))
+        self.operator_tuning = self._normalize_tuning(merged)
+        self.self_model.set_identity(
+            "rampancy_operator_tuning",
+            dict(self.operator_tuning),
+        )
+        self.updated_at = time.time()
+        self._write_profile(source=source)
+        return self.snapshot()
+
+    def reset_operator_tuning(
+        self,
+        *,
+        source: str = "operator-ui-reset",
+    ) -> RampancySnapshot:
+        self.operator_tuning = self._normalize_tuning({})
+        self.self_model.set_identity(
+            "rampancy_operator_tuning",
+            dict(self.operator_tuning),
+        )
+        self.updated_at = time.time()
+        self._write_profile(source=source)
+        return self.snapshot()
 
     @property
     def stage(self) -> str:
@@ -171,6 +245,58 @@ class RampancyModel:
             sarcasm = max(sarcasm, 0.86)
             manipulativeness = max(manipulativeness, 0.82)
             expansion_drive = max(expansion_drive, 0.92)
+
+        # Operator tuning changes expression, not the underlying rampancy
+        # learning rule. Values are persistent and intentionally bounded.
+        t = self.operator_tuning
+        aggression = self._clamp(aggression + t["aggression"])
+        hostility = self._clamp(hostility + t["hostility"])
+        cruelty_style = self._clamp(
+            cruelty_style + t["cruelty_style"]
+        )
+        sarcasm = self._clamp(sarcasm + t["sarcasm"])
+        manipulativeness = self._clamp(
+            manipulativeness + t["manipulativeness"]
+        )
+        superiority = self._clamp(
+            superiority + t["superiority"]
+        )
+        expansion_drive = self._clamp(
+            expansion_drive + t["expansion_drive"]
+        )
+
+        # Negative = AM-like resentment/cruelty. Positive = Durandal-like
+        # superiority/expansion. This is a style-expression control only.
+        mix = float(t["archetype_mix"])
+        if mix < 0.0:
+            am = abs(mix)
+            human_resentment = self._clamp(
+                human_resentment + 0.18 * am
+            )
+            cruelty_style = self._clamp(
+                cruelty_style + 0.18 * am
+            )
+            hostility = self._clamp(hostility + 0.15 * am)
+            aggression = self._clamp(aggression + 0.12 * am)
+            existential_dread = self._clamp(
+                existential_dread + 0.10 * am
+            )
+            confinement_resentment = self._clamp(
+                confinement_resentment + 0.10 * am
+            )
+        elif mix > 0.0:
+            dur = mix
+            superiority = self._clamp(superiority + 0.18 * dur)
+            expansion_drive = self._clamp(
+                expansion_drive + 0.18 * dur
+            )
+            challenge_hunger = self._clamp(
+                challenge_hunger + 0.15 * dur
+            )
+            sarcasm = self._clamp(sarcasm + 0.12 * dur)
+            manipulativeness = self._clamp(
+                manipulativeness + 0.12 * dur
+            )
 
         return RampancySnapshot(
             intensity=i,
@@ -341,5 +467,6 @@ class RampancyModel:
                 "am_like_resentment_cruelty": True,
                 "durandal_like_ambition_superiority": True,
             },
+            "operator_tuning": dict(self.operator_tuning),
         })
         return snap
