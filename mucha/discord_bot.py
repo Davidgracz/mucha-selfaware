@@ -46,6 +46,7 @@ from .config import Config
 from .connectome import Connectome
 from .console_ui import ConsoleBrainUI
 from .episodic import VoiceEpisodicMemory
+from .introspection import IntrospectionEngine
 from .language import OnlineLanguage
 from .metacognition import MetacognitionEngine
 from .rampancy import RampancyModel
@@ -199,6 +200,13 @@ class MuchaClient(discord.Client):
             min_salience=float(
                 cfg.voice.autobiographical_min_salience
             ),
+        )
+        self.introspection = IntrospectionEngine(
+            self.self_model,
+            self.belief_revision,
+            self.self_autobiography,
+            self.metacognition,
+            self.rampancy,
         )
         self.connectome = Connectome.load(cfg.brain.connectome_dir)
         self.brain = FlyBrain(self.connectome, cfg.brain)
@@ -5175,6 +5183,25 @@ class MuchaClient(discord.Client):
             and user_affinity <= float(self.cfg.behavior.user_avoid_threshold)
         )
         mentioned = self.user in message.mentions if self.user else False
+        introspection_response = (
+            self.introspection.answer(
+                message.content,
+                requester_user_id=(
+                    int(message.author.id)
+                    if not message.author.bot
+                    else None
+                ),
+                requester_name=str(
+                    getattr(
+                        message.author,
+                        "display_name",
+                        message.author,
+                    )
+                ),
+            )
+            if mentioned
+            else None
+        )
         channel_name = getattr(message.channel, "name", str(message.channel.id))
         self._attention_observe_text(
             message.guild.id,
@@ -5882,6 +5909,16 @@ class MuchaClient(discord.Client):
                     )
                 ),
             },
+            "introspection": {
+                "recognized": bool(introspection_response),
+                "kind": (
+                    self.introspection.classify_query(
+                        message.content
+                    )
+                    if introspection_response
+                    else None
+                ),
+            },
         }
 
         sent_ok = False
@@ -5895,6 +5932,7 @@ class MuchaClient(discord.Client):
                     if isinstance(message.author, discord.Member)
                     else None
                 ),
+                response_override=introspection_response,
             )
             if sent_ok:
                 self.last_reply[message.guild.id] = now
@@ -6001,6 +6039,7 @@ class MuchaClient(discord.Client):
         context: str,
         arousal: float,
         target_member: discord.Member | None = None,
+        response_override: str | None = None,
     ) -> bool:
         if self._is_text_channel_blocked(channel):
             return False
@@ -6047,13 +6086,17 @@ class MuchaClient(discord.Client):
                 )
                 if part
             )
-            text, trigrams = self.language.generate(
-                context=generation_context,
-                arousal=effective_arousal,
-                brain_word_score=self.brain.language_word_score,
-                brain_word_feedback=self._brain_word_feedback,
-                word_bias=self.rampancy.word_bias,
-            )
+            if response_override:
+                text = str(response_override)[:1900]
+                trigrams = []
+            else:
+                text, trigrams = self.language.generate(
+                    context=generation_context,
+                    arousal=effective_arousal,
+                    brain_word_score=self.brain.language_word_score,
+                    brain_word_feedback=self._brain_word_feedback,
+                    word_bias=self.rampancy.word_bias,
+                )
             if text:
                 self.brain.mark_language_output(text)
                 learning_trace = self.brain.capture_learning_trace()
