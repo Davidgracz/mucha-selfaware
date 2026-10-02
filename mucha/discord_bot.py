@@ -607,6 +607,16 @@ class MuchaClient(discord.Client):
                 "words": words,
                 "word_feedback": feedback,
                 "llm_composer": self.llm_composer.diagnostics(),
+                "route": dict(
+                    getattr(self, "_language_route_debug", {})
+                ),
+            },
+            "tts": {
+                "audio": dict(self._audio_debug),
+                "enabled": bool(self.cfg.voice.tts_enabled),
+                "interval_seconds": int(
+                    self.cfg.voice.tts_interval_seconds
+                ),
             },
             "reply_policy": {
                 "override_enabled": bool(
@@ -1924,6 +1934,16 @@ class MuchaClient(discord.Client):
             if verbosity in {"low", "medium", "high"}
             else "low"
         )
+        low = self.llm_composer._clamp01(
+            self.cfg.language.llm_rampancy_native_only_below
+        )
+        high = self.llm_composer._clamp01(
+            self.cfg.language.llm_rampancy_full_above
+        )
+        if high <= low:
+            high = min(1.0, low + 0.01)
+        self.llm_composer.rampancy_native_only_below = low
+        self.llm_composer.rampancy_full_above = high
         self.voice_episodes.semantic_memory_enabled = bool(
             self.cfg.voice.semantic_memory_enabled
         )
