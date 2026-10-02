@@ -241,7 +241,7 @@ class LLMComposer:
         request_json = {
             "model": model,
             "instructions": instructions,
-            "input": [{"role": "user", "content": input_text}],
+            "input": input_text,
             "max_output_tokens": self.max_output_tokens,
             "store": False,
         }
