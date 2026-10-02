@@ -148,7 +148,7 @@ def main() -> None:
     assert "def _text_language_ready(" in bot_source
     assert "llm_composer_enabled: bool = True" in config_source
     assert (
-        'llm_provider_order: str = "groq,ollama,openai"'
+        'llm_provider_order: str = "groq,ollama"'
         in config_source
     )
     assert (
@@ -156,7 +156,7 @@ def main() -> None:
         in config_source
     )
     assert 'llm_ollama_model: str = "qwen3:8b"' in config_source
-    assert 'llm_provider_order = "groq,ollama,openai"' in toml_source
+    assert 'llm_provider_order = "groq,ollama"' in toml_source
     assert 'llm_groq_model = "qwen/qwen3.8-27b"' in toml_source
     assert 'llm_ollama_model = "qwen3:8b"' in toml_source
 
