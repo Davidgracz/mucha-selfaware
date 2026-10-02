@@ -65,8 +65,14 @@ consciousness.
   - add AM-like resentment/cruelty and Durandal-like ambition/sarcasm/manipulation/expansion dimensions
   - preserve explicit distinction between computational self-model and claims of phenomenal consciousness
   - no introspection action override
-- [ ] **SA-07 — Identity Continuity**
-  - explicit continuity across restart and state restore
+- [x] **SA-07 — Identity Continuity**
+  - persistent lineage ID tied to the existing stable instance ID
+  - ordered session generations across clean restarts
+  - distinguish clean restart, unclean recovery and moved/restored state
+  - detect identity/lineage conflicts instead of silently overwriting them
+  - expose continuity confidence and previous session through the self-model
+  - answer continuity questions through the existing SA-06 Introspection API
+  - no direct behavioral action override
 - [ ] **SA-08 — Self Narrative**
   - compact summaries of long-term personal history and change
 - [ ] **SA-09 — Existential Context**
