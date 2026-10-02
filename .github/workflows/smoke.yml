@@ -27,7 +27,7 @@ jobs:
 
       - name: Compile
         run: |
-          python -m py_compile mucha/*.py tests/smoke_test.py tests/self_model_test.py tests/runtime_awareness_test.py
+          python -m py_compile mucha/*.py tests/smoke_test.py tests/self_model_test.py tests/runtime_awareness_test.py tests/rampancy_test.py
 
       - name: Self model test
         run: |
@@ -36,6 +36,10 @@ jobs:
       - name: Runtime awareness test
         run: |
           python tests/runtime_awareness_test.py
+
+      - name: Rampancy test
+        run: |
+          python tests/rampancy_test.py
 
       - name: Smoke test
         run: |
