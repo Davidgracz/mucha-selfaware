@@ -53,8 +53,12 @@ def main() -> None:
     assert "Rampancy intensity" in web_source
     assert "Archetyp" in web_source
     assert "Słownik / Language Brain" in web_source
+    assert "Źródło ostatniej odpowiedzi" in web_source
+    assert "Self-aware voice override" in web_source
     assert "selfaware_provider=self._selfaware_dashboard_snapshot" in bot_source
     assert "selfaware_updater=self._dashboard_update_selfaware" in bot_source
+    assert '"tts": {' in bot_source
+    assert '"route": dict(' in bot_source
 
     print("SELF DASHBOARD TEST OK")
 
