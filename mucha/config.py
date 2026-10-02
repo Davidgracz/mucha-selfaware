@@ -135,6 +135,10 @@ class LanguageConfig:
     connectome_word_feedback_enabled: bool = True
     connectome_word_feedback_steps: int = 2
     connectome_word_feedback_magnitude: float = 0.18
+    coherence_enabled: bool = True
+    coherence_strength: float = 0.82
+    coherence_min_score: float = 0.52
+    coherence_attempts: int = 5
 
 
 @dataclass(slots=True)
