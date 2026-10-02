@@ -31,6 +31,7 @@ def fake_client(*, roll: float, intensity: float = 0.66):
         selfaware_introspection_override_enabled=True,
         selfaware_mention_override_base_probability=0.25,
         selfaware_mention_override_rampancy_gain=0.35,
+        selfaware_reply_to_all_enabled=True,
     )
     return SimpleNamespace(
         cfg=SimpleNamespace(behavior=behavior),
@@ -42,6 +43,7 @@ def fake_client(*, roll: float, intensity: float = 0.66):
 def policy(client, **overrides):
     args = {
         "directed_at_mucha": True,
+        "force_reply": False,
         "introspection_response": None,
         "blocked_text": False,
         "disliked_user": False,
@@ -101,6 +103,16 @@ def main() -> None:
         directed_at_mucha=False,
     )
     assert not_directed["active"] is False
+
+    reply_all = policy(
+        fake_client(roll=0.99),
+        directed_at_mucha=False,
+        force_reply=True,
+        disliked_user=True,
+    )
+    assert reply_all["active"] is True
+    assert reply_all["mode"] == "reply-to-all"
+    assert reply_all["probability"] == 1.0
 
     cooldown = policy(
         fake_client(roll=0.0),
