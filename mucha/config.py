@@ -140,8 +140,15 @@ class LanguageConfig:
     coherence_min_score: float = 0.52
     coherence_attempts: int = 5
     llm_composer_enabled: bool = True
-    llm_model: str = "gpt-6-luna"
-    llm_api_key_env: str = "OPENAI_API_KEY"
+    llm_provider_order: str = "groq,ollama,openai"
+    llm_groq_model: str = "qwen/qwen3.8-27b"
+    llm_groq_api_key_env: str = "GROQ_API_KEY"
+    llm_groq_base_url: str = "https://api.groq.com/openai/v1"
+    llm_ollama_model: str = "qwen3:8b"
+    llm_ollama_base_url: str = "http://127.0.0.1:11434"
+    llm_openai_model: str = "gpt-6-luna"
+    llm_openai_api_key_env: str = "OPENAI_API_KEY"
+    llm_openai_base_url: str = "https://api.openai.com/v1"
     llm_timeout_seconds: float = 25.0
     llm_max_output_tokens: int = 220
     llm_native_fallback: bool = True
