@@ -10,6 +10,7 @@ state/self_model.json.tmp
 data/connectome/*.npz
 data/connectome/*.npy
 data/connectome/manifest.json
+data/local_rampancy_corpus.txt
 raw_flywire/
 
 # VPS/dashboard runtime overrides
