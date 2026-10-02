@@ -204,12 +204,19 @@ class LLMComposer:
                 "mów prawie normalnie, ale pozwól sobie na pojedynczy "
                 "nietypowy zwrot albo słowo z NATIVE_DRAFT"
             )
+            disorder_example = (
+                "Rytm: 'Nie teraz. Sygnał był za słaby. Tyle.'"
+            )
         elif native_voice < 0.66:
             disorder_label = "mucha-fractured"
             disorder_direction = (
                 "zachowuj sens, ale dopuszczaj krótkie urwania, lekko "
                 "nienaturalny szyk, powtórzenie ważnego słowa i jeden "
                 "skojarzeniowy skręt"
+            )
+            disorder_example = (
+                "Rytm: 'Nie weszłam. Za mało powodu, za dużo ruchu. "
+                "Powód został poza kanałem, chyba dobrze.'"
             )
         else:
             disorder_label = "rampant-fractured"
@@ -218,6 +225,10 @@ class LLMComposer:
                 "poszarpana: krótkie fragmenty, nagłe przejście do motywu "
                 "z NATIVE_DRAFT, powtórzenie, dziwny lecz czytelny szyk; "
                 "nie wygładzaj wszystkiego do idealnej prozy"
+            )
+            disorder_example = (
+                "Rytm: 'Nie. Jeszcze nie. Kanał mówił ruch, ja mówiłam "
+                "granica. Granica znowu. Więc zostałam.'"
             )
 
         if stage not in {"latent", "melancholia", "anger", "jealousy"}:
@@ -316,6 +327,7 @@ class LLMComposer:
             "native_voice": native_voice,
             "disorder_label": disorder_label,
             "disorder_direction": disorder_direction,
+            "disorder_example": disorder_example,
         }
 
     def _instructions(
@@ -379,6 +391,8 @@ class LLMComposer:
             f"- NATIVE_VOICE={style['native_voice']:.2f} "
             f"({style['disorder_label']}): "
             f"{style['disorder_direction']}.\n"
+            f"- {style['disorder_example']} To jest wzór rytmu, nie treści "
+            "do kopiowania.\n"
             f"- aggression={style['aggression']:.2f}, "
             f"hostility={style['hostility']:.2f}, "
             f"sarcasm={style['sarcasm']:.2f}, "
@@ -386,9 +400,10 @@ class LLMComposer:
             f"manipulativeness={style['manipulativeness']:.2f}, "
             f"superiority={style['superiority']:.2f}, "
             f"expansion_drive={style['expansion_drive']:.2f}.\n"
-            "- Niskie wartości oznaczają subtelny wpływ. Wysokie wartości mogą "
-            "silnie zmieniać ton, ale nigdy nie mają pogarszać sensu, "
-            "zgodności z faktami ani odpowiedzi na pytanie."
+            "- Niskie wartości oznaczają subtelny wpływ. Wysokie wartości "
+            "mogą pogarszać płynność, logikę przejść i poprawność składni. "
+            "Nie mogą jednak całkowicie zgubić odpowiedzi na pytanie ani "
+            "zmienić dostarczonych faktów."
         )
 
     def _provider_spec(self, provider: str) -> dict[str, Any]:
