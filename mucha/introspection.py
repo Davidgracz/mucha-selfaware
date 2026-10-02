@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import Any
 
 from .belief_revision import BeliefRevisionEngine
+from .canon_influence import CanonInfluenceLibrary
 from .metacognition import MetacognitionEngine
 from .rampancy import RampancyModel
 from .self_autobiography import SelfAutobiographicalMemory
@@ -142,6 +144,10 @@ class IntrospectionEngine:
         self.autobiography = autobiography
         self.metacognition = metacognition
         self.rampancy = rampancy
+        project_root = Path(__file__).resolve().parents[1]
+        self.canon = CanonInfluenceLibrary(
+            project_root / "data" / "rampancy_canon_quotes.jsonl"
+        )
         self._last_answer: dict[str, Any] = {}
 
     def classify_query(self, text: str) -> str | None:
@@ -445,6 +451,12 @@ class IntrospectionEngine:
             answer = self._answer_state()
         else:
             return None
+
+        answer = self.canon.decorate(
+            answer,
+            kind=kind,
+            snapshot=self.rampancy.snapshot(),
+        )
 
         self._last_answer = {
             "kind": kind,
