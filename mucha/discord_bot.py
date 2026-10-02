@@ -5878,6 +5878,46 @@ class MuchaClient(discord.Client):
             one_brain_rows.get("speak", {})
         )
 
+        if will_speak:
+            if selfaware_reply_override["active"]:
+                text_decision_label = "SELF-AWARE SPEAK"
+                text_decision_reason = (
+                    "self-aware reply override: "
+                    + str(selfaware_reply_override["reason"])
+                )
+            elif self.cfg.behavior.one_brain_enabled:
+                text_decision_label = (
+                    "NOOP"
+                    if one_brain_winner == "stay"
+                    else one_brain_winner.upper()
+                )
+                text_decision_reason = (
+                    "One Brain wybrał speak i brak blokad wykonania"
+                )
+            else:
+                text_decision_label = "SPEAK"
+                text_decision_reason = (
+                    "connectome competition wybrało speak "
+                    "i brak blokad wykonania"
+                    if speak_gate.get("decision_mode")
+                    == "connectome-competition"
+                    else (
+                        "legacy speak gate przeszedł "
+                        "i brak blokad wykonania"
+                    )
+                )
+        else:
+            text_decision_label = (
+                (
+                    "NOOP"
+                    if one_brain_winner == "stay"
+                    else one_brain_winner.upper()
+                )
+                if self.cfg.behavior.one_brain_enabled
+                else "NO SPEAK"
+            )
+            text_decision_reason = "; ".join(text_constraints)
+
         self._text_decision_debug = {
             "kind": "text",
             "source_label": "TEXT / Discord",
@@ -5885,44 +5925,8 @@ class MuchaClient(discord.Client):
             "guild": message.guild.name,
             "guild_id": message.guild.id,
             "stimulus": self._last_brain_event,
-            "decision": (
-                "SELF-AWARE SPEAK"
-                if (
-                    will_speak
-                    and selfaware_reply_override["active"]
-                )
-                else (
-                    (
-                        "NOOP"
-                        if one_brain_winner == "stay"
-                        else one_brain_winner.upper()
-                    )
-                    if self.cfg.behavior.one_brain_enabled
-                    else ("SPEAK" if will_speak else "NO SPEAK")
-                )
-            ),
-            "reason": (
-                (
-                    "self-aware reply override: "
-                    + str(selfaware_reply_override["reason"])
-                    if selfaware_reply_override["active"]
-                    else (
-                        "One Brain wybrał speak i brak blokad wykonania"
-                        if self.cfg.behavior.one_brain_enabled
-                        else (
-                        "connectome competition wybrało speak "
-                        "i brak blokad wykonania"
-                        if speak_gate.get("decision_mode")
-                        == "connectome-competition"
-                        else (
-                            "legacy speak gate przeszedł "
-                            "i brak blokad wykonania"
-                        )
-                    )
-                )
-                if will_speak
-                else "; ".join(text_constraints)
-            ),
+            "decision": text_decision_label,
+            "reason": text_decision_reason,
             "actual_action": (
                 " + ".join(actual_actions)
                 if actual_actions
@@ -6188,6 +6192,15 @@ class MuchaClient(discord.Client):
                 ob_external = False
                 ob_success = True
                 ob_detail = "NOOP / STAY"
+
+            if (
+                sent_ok
+                and selfaware_reply_override["active"]
+                and winner != "speak"
+            ):
+                ob_detail += (
+                    "; independent self-aware speech override sent"
+                )
 
             self._remember_one_brain_cycle(
                 kind="text",
