@@ -300,6 +300,12 @@ connectome_behavior_competition_enabled = true
 one_brain_enabled = true
 one_brain_predicted_reward_gain = 0.85
 one_brain_prediction_steps = 2
+# mucha-selfaware may answer direct mentions without requiring One Brain SPEAK.
+# Hard channel/user blocks and reply cooldown still apply.
+selfaware_reply_override_enabled = true
+selfaware_introspection_override_enabled = true
+selfaware_mention_override_base_probability = 0.25
+selfaware_mention_override_rampancy_gain = 0.35
 autonomous_loop_enabled = true
 autonomous_predicted_reward_gain = 0.85
 autonomous_prediction_steps = 2
