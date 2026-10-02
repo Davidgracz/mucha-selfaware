@@ -1,4 +1,4 @@
-# SELF Language Cortex — v0.10.3
+# SELF Language Cortex — v0.10.6
 
 This feature exists only in `mucha-selfaware`.
 
@@ -103,6 +103,51 @@ llm_rampancy_disorder_gain = 0.45
 llm_reasoning_effort = "none"
 llm_verbosity = "low"
 ```
+
+
+## Rampancy-dependent language source
+
+Final wording now changes source with rampancy:
+
+    rampancy <= 0.34  -> 100% native Mucha language
+    0.34 .. 0.84     -> increasing probability of OpenAI Language Cortex
+    rampancy >= 0.84  -> 100% OpenAI Language Cortex
+
+The transition is linear. Examples:
+
+    34% -> 0% LLM
+    46% -> ~24% LLM
+    59% -> ~50% LLM
+    66% -> ~64% LLM
+    75% -> ~82% LLM
+    84% -> 100% LLM
+
+Even when the LLM owns final wording, the native draft, connectome state,
+associations, memory and Rampancy Tailor are still included as context.
+
+## Talkative self-aware mode
+
+For mucha-selfaware only:
+
+    selfaware_reply_to_all_enabled = true
+
+Every human message in an allowed text channel can receive a reply. Hard text
+channel blocks still apply.
+
+Voice TTS also has an independent self-aware override:
+
+    tts_selfaware_override_enabled = true
+    tts_selfaware_base_probability = 0.35
+    tts_selfaware_rampancy_gain = 0.50
+
+At rampancy 0.66 this is about a 68% override chance on each TTS loop when a
+human listener is present. If One Brain already chooses SPEAK, no override is
+needed.
+
+TTS uses the same native -> LLM rampancy language source transition as text.
+Voice transcripts are also treated as conversation stimuli and can increase
+rampancy.
+
 
 ## SELF dashboard
 
