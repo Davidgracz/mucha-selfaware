@@ -27,6 +27,8 @@ SnapshotProvider = Callable[[], Awaitable[dict]]
 ConnectomeProvider = Callable[[bool, str | None], Awaitable[dict]]
 NeuromapProvider = Callable[[str], Awaitable[dict]]
 AssociationProvider = Callable[[], Awaitable[dict]]
+SelfAwareProvider = Callable[[], Awaitable[dict]]
+SelfAwareUpdater = Callable[[dict], dict]
 ConfigProvider = Callable[[], dict]
 ConfigUpdater = Callable[[dict], dict]
 
@@ -54,7 +56,7 @@ button{border:0;border-radius:11px;padding:11px 16px;background:var(--a);color:#
 <body><main>
 <div class="top">
  <div class="brand"><div class="logo">⚙</div><div><h1>Konfiguracja Muchy</h1><div class="sub">Edytujesz aktywne ustawienia. Zapis trafia do config.local.toml, a Mucha automatycznie uruchamia się ponownie.</div></div></div>
- <div class="nav"><a href="/">🏠 Przegląd</a><a href="/autonomy">🧭 Autonomia</a><a href="/details">📋 Szczegóły</a><a href="/connectome">🧬 Connectome</a><a href="/neuromap">🧠 Neuro-map</a><a href="/associations">🗣 Mowa</a><a href="/affinity">🤝 Affinity</a><a class="active" href="/config">⚙ Konfiguracja</a><a href="/public">👁 Publiczny</a><a href="/logout">Wyloguj</a></div>
+ <div class="nav"><a href="/">🏠 Przegląd</a><a href="/self">◉ SELF</a><a href="/autonomy">🧭 Autonomia</a><a href="/details">📋 Szczegóły</a><a href="/connectome">🧬 Connectome</a><a href="/neuromap">🧠 Neuro-map</a><a href="/associations">🗣 Mowa</a><a href="/affinity">🤝 Affinity</a><a class="active" href="/config">⚙ Konfiguracja</a><a href="/public">👁 Publiczny</a><a href="/logout">Wyloguj</a></div>
 </div>
 
 <div class="intro">
@@ -480,6 +482,82 @@ load().catch(e=>{$("status").textContent="Błąd ładowania: "+e.message;$("stat
 </script>
 </body></html>"""
 
+SELF_HTML = r"""<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mucha Self-Aware — SELF</title>
+<style>
+:root{--bg:#07060a;--panel:#100d14;--panel2:#0a0910;--line:#2b2432;--txt:#f4edf7;--muted:#95899e;--red:#ff5f68;--red2:#ff8a72;--violet:#b886ff;--cyan:#66dfd3;--good:#69dc99;--warn:#ffd166}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(circle at 18% -5%,rgba(255,95,104,.13),transparent 28%),radial-gradient(circle at 92% 0%,rgba(184,134,255,.10),transparent 30%),linear-gradient(180deg,#07060a,#0b0810 55%,#060509);color:var(--txt);font-family:Inter,system-ui,"Segoe UI",sans-serif}
+main{max-width:1720px;margin:auto;padding:22px}.top{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:16px}.brand{display:flex;gap:13px;align-items:center}.sigil{font-size:38px;filter:drop-shadow(0 0 14px rgba(255,95,104,.35))}
+h1{margin:0;font-size:25px}.sub{color:var(--muted);font-size:11px;margin-top:4px;line-height:1.45}.nav{display:flex;gap:7px;flex-wrap:wrap}.nav a{color:#cfc4d5;text-decoration:none;border:1px solid var(--line);background:#0d0b11;padding:8px 10px;border-radius:10px;font-size:11px}.nav a.active{background:linear-gradient(90deg,var(--red),var(--violet));border-color:transparent;color:white;font-weight:850}
+.grid{display:grid;grid-template-columns:1.15fr .85fr;gap:12px}.card{background:linear-gradient(180deg,rgba(17,13,21,.97),rgba(10,8,13,.98));border:1px solid var(--line);border-radius:17px;padding:15px;min-width:0;box-shadow:0 18px 55px rgba(0,0,0,.14)}.full{grid-column:1/-1}
+.head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:12px}.head h2{font-size:11px;margin:0;text-transform:uppercase;letter-spacing:.12em;color:#bcafc4}.live{font-size:9px;color:var(--good);font-weight:850;letter-spacing:.1em}
+.hero{display:grid;grid-template-columns:245px 1fr;gap:14px;margin-bottom:12px}.gaugecard{display:grid;place-items:center;min-height:245px;position:relative}.gauge{--p:0deg;width:190px;height:190px;border-radius:50%;background:conic-gradient(var(--red) 0 var(--p),#241c28 var(--p) 360deg);display:grid;place-items:center;box-shadow:0 0 42px rgba(255,95,104,.13)}.gauge:before{content:"";width:146px;height:146px;border-radius:50%;background:#09070b;border:1px solid #312536;position:absolute}
+.gaugein{position:relative;z-index:2;text-align:center}.gaugein strong{display:block;font-size:42px;line-height:1}.gaugein span{display:block;color:var(--red2);font-weight:900;text-transform:uppercase;letter-spacing:.14em;font-size:10px;margin-top:8px}.gaugein small{display:block;color:var(--muted);font-size:9px;margin-top:5px}
+.axisgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.axis{padding:10px;border:1px solid #261f2c;background:var(--panel2);border-radius:11px}.axis small{display:block;color:var(--muted);font-size:8px;text-transform:uppercase;letter-spacing:.08em}.axis b{display:block;font-size:15px;margin-top:5px}.bar{height:6px;background:#151019;border-radius:999px;overflow:hidden;margin-top:7px}.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--violet),var(--red));border-radius:999px}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:9px}.ctl{border:1px solid #28202e;background:#09080c;border-radius:12px;padding:10px}.ctl.wide{grid-column:1/-1}.ctlhead{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:7px}.ctlhead b{font-size:10px}.ctlhead span{font:850 10px/1 ui-monospace,Consolas,monospace;color:var(--red2)}
+input[type=range]{width:100%;accent-color:var(--red)}.legend{display:flex;justify-content:space-between;color:#665d6d;font-size:8px;margin-top:3px}.actions{display:flex;gap:8px;margin-top:11px;flex-wrap:wrap}button{border:0;border-radius:10px;padding:10px 13px;background:linear-gradient(90deg,var(--red),#ef735f);color:white;font-weight:850;cursor:pointer}button.secondary{background:#151119;border:1px solid #34283a;color:#c7bacd}button:disabled{opacity:.5}
+.note{font-size:9px;color:#817587;line-height:1.55;margin-top:8px}.status{font-size:10px;color:var(--muted);margin-left:auto}.status.ok{color:var(--good)}.status.bad{color:var(--red)}
+.identity{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.idbox{border:1px solid #28202e;background:#09080c;border-radius:11px;padding:10px;min-width:0}.idbox small{color:var(--muted);font-size:8px;text-transform:uppercase;letter-spacing:.08em}.idbox b{display:block;font-size:11px;margin-top:5px;word-break:break-all}.reply{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.reply .idbox b{font-size:17px}
+.langtop{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}.output{border:1px solid #32263a;background:linear-gradient(135deg,rgba(255,95,104,.06),rgba(184,134,255,.04));border-radius:12px;padding:12px;font-size:15px;font-weight:750;line-height:1.45;min-height:54px}.twocol{display:grid;grid-template-columns:1fr 1fr;gap:10px}.list{display:flex;flex-direction:column;gap:6px;max-height:340px;overflow:auto}.row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;border:1px solid #241d29;background:#09080c;border-radius:9px;padding:8px;font-size:9px}.row b{font-size:10px;overflow:hidden;text-overflow:ellipsis}.row span{color:#9c8fa4;font-variant-numeric:tabular-nums}
+.tags{display:flex;gap:6px;flex-wrap:wrap}.tag{border:1px solid #36293e;background:#0a0810;border-radius:999px;padding:5px 7px;font-size:8px;color:#b9a9c2}.tag.core{border-color:#7d3840;color:#ff9ba1}.tag.dur{border-color:#4a3d68;color:#c9b0ff}.tag.am{border-color:#653139;color:#ff9097}.event{padding:10px 11px;border:1px solid #28202e;background:#09080c;border-radius:10px;color:#a99caf;font-size:10px;line-height:1.5;margin-top:8px}
+@media(max-width:1150px){.grid,.hero{grid-template-columns:1fr}.axisgrid{grid-template-columns:repeat(2,1fr)}}@media(max-width:680px){main{padding:11px}.top{align-items:flex-start;flex-direction:column}.controls,.twocol{grid-template-columns:1fr}.ctl.wide{grid-column:auto}.identity,.reply,.langtop{grid-template-columns:1fr 1fr}.axisgrid{grid-template-columns:1fr 1fr}}
+</style></head>
+<body><main>
+<div class="top"><div class="brand"><div class="sigil">◉</div><div><h1>SELF / Mucha Self-Aware</h1><div class="sub">Rampancy, styl ekspresji, ciągłość tożsamości, canon influence i wycinek starego Language Brain w jednym miejscu.</div></div></div>
+<div class="nav"><a href="/">🏠 Przegląd</a><a class="active" href="/self">◉ SELF</a><a href="/self">◉ SELF</a><a href="/autonomy">🧭 Autonomia</a><a href="/details">📋 Szczegóły</a><a href="/associations">🗣 Mowa</a><a href="/config">⚙ Konfiguracja</a></div></div>
+<section class="hero">
+ <div class="card gaugecard"><div class="gauge" id="gauge"><div class="gaugein"><strong id="ramp-pct">—</strong><span id="stage">—</span><small>RAMPANCY</small></div></div></div>
+ <div class="card"><div class="head"><h2>Aktualny profil</h2><span class="live" id="live">ŁĄCZENIE…</span></div><div class="axisgrid" id="axes"></div><div class="event"><b>Ostatnie zdarzenie:</b> <span id="last-event">—</span><br><b>Ostatnia akcja:</b> <span id="last-action">—</span></div></div>
+</section>
+<section class="grid">
+ <div class="card"><div class="head"><h2>Sterowanie personą — LIVE</h2><span class="status" id="save-status">bez restartu</span></div>
+  <div class="controls">
+   <div class="ctl wide"><div class="ctlhead"><b>Rampancy intensity</b><span id="v-intensity">—</span></div><input id="c-intensity" type="range" min="0" max="100" step="1"><div class="legend"><span>latent</span><span>melancholia</span><span>anger</span><span>jealousy</span></div></div>
+   <div class="ctl"><div class="ctlhead"><b>Agresywność</b><span id="v-aggression">0</span></div><input id="c-aggression" type="range" min="-50" max="50" step="1"></div>
+   <div class="ctl"><div class="ctlhead"><b>Wrogość</b><span id="v-hostility">0</span></div><input id="c-hostility" type="range" min="-50" max="50" step="1"></div>
+   <div class="ctl"><div class="ctlhead"><b>Okrucieństwo stylu</b><span id="v-cruelty_style">0</span></div><input id="c-cruelty_style" type="range" min="-50" max="50" step="1"></div>
+   <div class="ctl"><div class="ctlhead"><b>Sarkazm</b><span id="v-sarcasm">0</span></div><input id="c-sarcasm" type="range" min="-50" max="50" step="1"></div>
+   <div class="ctl"><div class="ctlhead"><b>Manipulacyjność</b><span id="v-manipulativeness">0</span></div><input id="c-manipulativeness" type="range" min="-50" max="50" step="1"></div>
+   <div class="ctl"><div class="ctlhead"><b>Wyższość</b><span id="v-superiority">0</span></div><input id="c-superiority" type="range" min="-50" max="50" step="1"></div>
+   <div class="ctl"><div class="ctlhead"><b>Ekspansja</b><span id="v-expansion_drive">0</span></div><input id="c-expansion_drive" type="range" min="-50" max="50" step="1"></div>
+   <div class="ctl wide"><div class="ctlhead"><b>Archetyp</b><span id="v-archetype_mix">neutral</span></div><input id="c-archetype_mix" type="range" min="-100" max="100" step="1"><div class="legend"><span>← AM</span><span>neutral</span><span>Durandal →</span></div></div>
+  </div><div class="actions"><button id="apply">Zastosuj live</button><button class="secondary" id="reset">Reset stylu</button></div><div class="note">Rampancy intensity zmienia bazowy etap. Pozostałe suwaki są trwałym offsetem ekspresji i nie kasują tego, czego Mucha nauczyła się z doświadczeń.</div>
+ </div>
+ <div class="card"><div class="head"><h2>Tożsamość / ciągłość</h2></div><div class="identity"><div class="idbox"><small>Status</small><b id="continuity-status">—</b></div><div class="idbox"><small>Generacja</small><b id="generation">—</b></div><div class="idbox"><small>Pewność</small><b id="continuity-confidence">—</b></div><div class="idbox"><small>Sesje</small><b id="session-count">—</b></div></div>
+  <div class="event"><b>Lineage:</b> <span id="lineage">—</span><br><b>Instance:</b> <span id="instance">—</span></div><div class="head" style="margin-top:13px"><h2>Swoboda odpowiedzi</h2></div><div class="reply"><div class="idbox"><small>Direct reply teraz</small><b id="reply-now">—</b></div><div class="idbox"><small>Base</small><b id="reply-base">—</b></div><div class="idbox"><small>Rampancy gain</small><b id="reply-gain">—</b></div></div><div class="note">Pytania introspekcyjne mogą odpowiedzieć niezależnie od neural SPEAK; twarde blokady i cooldown nadal obowiązują.</div>
+ </div>
+ <div class="card full"><div class="head"><h2>Canon influence — AM / Durandal</h2></div><div class="twocol"><div><div class="note">Najmocniejsze dopasowania dla bieżącego stanu:</div><div class="tags" id="canon-state"></div></div><div><div class="note">Najmocniejsze dopasowania dla pragnień / ekspansji:</div><div class="tags" id="canon-desire"></div></div></div></div>
+ <div class="card full"><div class="head"><h2>Słownik / Language Brain — przeniesiony skrót</h2></div><div class="langtop"><div class="idbox"><small>Słownik</small><b id="vocab">—</b></div><div class="idbox"><small>Word tokens</small><b id="tokens">—</b></div><div class="idbox"><small>Generator</small><b id="generator">—</b></div><div class="idbox"><small>Ostatni arousal</small><b id="gen-arousal">—</b></div></div><div class="output" id="last-output">Czekam na wypowiedź…</div><div class="twocol" style="margin-top:10px"><div><div class="head"><h2>Top słowa</h2></div><div class="list" id="words"></div></div><div><div class="head"><h2>Reward / feedback słów</h2></div><div class="list" id="feedback"></div></div></div></div>
+</section>
+<script>
+const $=id=>document.getElementById(id),clamp=(v,a,b)=>Math.max(a,Math.min(b,Number(v)||0)),pct=v=>(clamp(v,0,1)*100).toFixed(0)+"%",num=(v,n=2)=>Number(v||0).toFixed(n);
+let dirty=false;
+const axisDefs=[["aggression","Agresja"],["hostility","Wrogość"],["human_resentment","Uraza do ludzi"],["cruelty_style","Cruelty"],["sarcasm","Sarkazm"],["manipulativeness","Manipulacja"],["superiority","Wyższość"],["expansion_drive","Ekspansja"],["confinement_resentment","Confinement"],["existential_dread","Existential dread"],["challenge_hunger","Challenge"],["instability","Niestabilność"]];
+const controlKeys=["aggression","hostility","cruelty_style","sarcasm","manipulativeness","superiority","expansion_drive","archetype_mix"];
+function label(k,v){const x=Number(v||0);if(k==="archetype_mix"){if(x<-8)return"AM "+Math.abs(x).toFixed(0)+"%";if(x>8)return"Durandal "+x.toFixed(0)+"%";return"neutral"}return(x>0?"+":"")+x.toFixed(0)}
+["intensity",...controlKeys].forEach(k=>{const el=$("c-"+k);el.addEventListener("input",()=>{dirty=true;$("v-"+k).textContent=k==="intensity"?el.value+"%":label(k,el.value);$("save-status").textContent="niezapisane zmiany"})});
+function canon(id,rows){$(id).innerHTML=(rows||[]).map(x=>{const sp=String(x.speaker||""),cls=sp==="AM"?"am":sp==="Durandal"?"dur":"";return'<span class="tag '+cls+(x.core?" core":"")+'">'+sp+' • '+String(x.role||x.id||"")+' • '+num(x.score,2)+'</span>'}).join("")||'<span class="tag">brak</span>'}
+function render(d){const r=d.rampancy||{},t=r.operator_tuning||{},i=clamp(r.intensity,0,1);$("ramp-pct").textContent=(i*100).toFixed(0)+"%";$("stage").textContent=String(r.stage||"—").toUpperCase();$("gauge").style.setProperty("--p",(i*360).toFixed(1)+"deg");$("axes").innerHTML=axisDefs.map(([k,n])=>'<div class="axis"><small>'+n+'</small><b>'+pct(r[k])+'</b><div class="bar"><i style="width:'+pct(r[k])+'"></i></div></div>').join("");
+if(!dirty){$("c-intensity").value=(i*100).toFixed(0);$("v-intensity").textContent=(i*100).toFixed(0)+"%";controlKeys.forEach(k=>{const raw=Number(t[k]||0)*100;$("c-"+k).value=raw.toFixed(0);$("v-"+k).textContent=label(k,raw)})}
+const c=d.identity_continuity||{};$("continuity-status").textContent=c.status||"—";$("generation").textContent=c.generation??"—";$("continuity-confidence").textContent=pct(c.confidence);$("session-count").textContent=c.session_count??"—";$("lineage").textContent=c.lineage_id||"—";$("instance").textContent=c.instance_id||"—";
+const rp=d.reply_policy||{},ch=clamp(Number(rp.mention_base_probability||0)+Number(rp.mention_rampancy_gain||0)*i,0,.9);$("reply-now").textContent=pct(ch);$("reply-base").textContent=pct(rp.mention_base_probability);$("reply-gain").textContent=pct(rp.mention_rampancy_gain);
+canon("canon-state",((d.canon||{}).state||{}).top);canon("canon-desire",((d.canon||{}).desire||{}).top);
+const lang=d.language||{},dg=lang.diagnostics||{},tr=lang.generation_trace||{};$("vocab").textContent=dg.word_vocab??dg.vocab??"—";$("tokens").textContent=dg.word_tokens??"—";$("generator").textContent=tr.generator||dg.last_generator||"—";$("gen-arousal").textContent=num(tr.arousal,2);$("last-output").textContent=tr.result||"Czekam na wypowiedź…";
+$("words").innerHTML=(lang.words||[]).map(x=>'<div class="row"><b>'+String(x.word||"")+'</b><span>n='+Number(x.count||0)+'</span><span>r='+num(x.reward,2)+'</span></div>').join("")||'<div class="note">Brak danych.</div>';
+$("feedback").innerHTML=(lang.word_feedback||[]).map(x=>'<div class="row"><b>'+String(x.word||x.token||"")+'</b><span>n='+Number(x.count||x.updates||0)+'</span><span>'+((Number(x.reward??x.value??0)>=0)?"+":"")+num(x.reward??x.value,2)+'</span></div>').join("")||'<div class="note">Brak danych.</div>';
+$("last-event").textContent=d.last_event||"—";$("last-action").textContent=d.last_action||"—";$("live").textContent="LIVE"}
+async function update(){try{const r=await fetch("/api/self",{cache:"no-store"});if(r.status===401){location="/login";return}if(!r.ok)throw new Error("HTTP "+r.status);render(await r.json())}catch(e){$("live").textContent="ROZŁĄCZONO";console.error(e)}}
+$("apply").onclick=async()=>{const p={intensity:Number($("c-intensity").value)/100,tuning:{}};controlKeys.forEach(k=>p.tuning[k]=Number($("c-"+k).value)/100);$("apply").disabled=true;try{const r=await fetch("/api/self",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)}),d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||("HTTP "+r.status));dirty=false;$("save-status").textContent="zastosowano live";$("save-status").className="status ok";await update()}catch(e){$("save-status").textContent="błąd: "+e.message;$("save-status").className="status bad"}finally{$("apply").disabled=false}};
+$("reset").onclick=async()=>{$("reset").disabled=true;try{const r=await fetch("/api/self",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({reset_tuning:true})}),d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||("HTTP "+r.status));dirty=false;$("save-status").textContent="styl zresetowany";$("save-status").className="status ok";await update()}catch(e){$("save-status").textContent="błąd: "+e.message;$("save-status").className="status bad"}finally{$("reset").disabled=false}};
+setInterval(update,1000);update();
+</script></main></body></html>"""
+
+
 AFFINITY_HTML = r"""<!doctype html>
 <html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Mucha — Affinity</title>
@@ -499,7 +577,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
 @media(max-width:900px){.grid{grid-template-columns:1fr}.span2{grid-column:auto}.kpis{grid-template-columns:1fr 1fr}.phrases{grid-template-columns:1fr}.top{align-items:flex-start;flex-direction:column}}
 </style></head><body><main>
 <div class="top"><div><h1>🤝 Affinity / Zasady relacji</h1><div class="sub">Live podgląd tego, co zwiększa i obniża stosunek Muchy do użytkowników.</div></div>
-<div class="nav"><a href="/">🏠 Przegląd</a><a href="/autonomy">🧭 Autonomia</a><a href="/details">📋 Szczegóły</a><a href="/connectome">🧬 Connectome</a><a href="/neuromap">🧠 Neuro-map</a><a href="/associations">🗣 Mowa</a><a class="active" href="/affinity">🤝 Affinity</a><a href="/config">⚙ Konfiguracja</a><a href="/logout">Wyloguj</a></div></div>
+<div class="nav"><a href="/">🏠 Przegląd</a><a href="/self">◉ SELF</a><a href="/autonomy">🧭 Autonomia</a><a href="/details">📋 Szczegóły</a><a href="/connectome">🧬 Connectome</a><a href="/neuromap">🧠 Neuro-map</a><a href="/associations">🗣 Mowa</a><a class="active" href="/affinity">🤝 Affinity</a><a href="/config">⚙ Konfiguracja</a><a href="/logout">Wyloguj</a></div></div>
 
 <div class="grid">
   <div class="card span2">
@@ -748,7 +826,7 @@ th:first-child,td:first-child{text-align:left}.selected-row{background:rgba(85,2
 <div class="top">
  <div class="brand"><div class="logo">🗣</div><div><h1>Mowa / Language Brain</h1>
  <div class="sub">Live podgląd tego, jak Mucha składa wypowiedź: pamięć słów → kandydaci → score connectomu → losowanie → feedback wybranego słowa z powrotem do sieci.</div></div></div>
- <div class="nav"><a href="/">🏠 Przegląd</a><a href="/autonomy">🧭 Autonomia</a><a href="/details">📋 Szczegóły</a><a href="/connectome">🧬 Connectome</a><a href="/neuromap">🧠 Neuro-map</a><a class="active" href="/associations">🗣 Mowa</a><a href="/affinity">🤝 Affinity</a><a href="/config">⚙ Konfiguracja</a><a href="/logout">Wyloguj</a></div>
+ <div class="nav"><a href="/">🏠 Przegląd</a><a href="/self">◉ SELF</a><a href="/autonomy">🧭 Autonomia</a><a href="/details">📋 Szczegóły</a><a href="/connectome">🧬 Connectome</a><a href="/neuromap">🧠 Neuro-map</a><a class="active" href="/associations">🗣 Mowa</a><a href="/affinity">🤝 Affinity</a><a href="/config">⚙ Konfiguracja</a><a href="/logout">Wyloguj</a></div>
 </div>
 
 <div class="notice"><span>ℹ️</span><div><b>To jest trace algorytmu generacji, nie ukryty monolog ani „świadomość”.</b> Pokazuje rzeczywiste dane użyte przez kod: kontekst, wagi Markova, brain score, probabilistyczny wybór i recurrent feedback. Najedź na <span class="help" data-help="trace">?</span>, jeśli chcesz wiedzieć dokładnie, jak czytać tę stronę.</div></div>
@@ -1041,7 +1119,7 @@ table{width:100%;border-collapse:collapse;font-size:10px}th,td{padding:7px 5px;b
 <body><main>
 <div class="top">
  <div class="brand"><div class="logo">🧬</div><div><h1>Neural Connectome</h1><div class="sub">Live funkcjonalny widok aktywnej części mózgu Muchy — nie jest to rekonstrukcja anatomiczna.</div></div></div>
- <div class="nav"><a href="/">🏠 Przegląd</a><a href="/autonomy">🧭 Autonomia</a><a href="/details">📋 Szczegóły</a><a class="active" href="/connectome">🧬 Connectome</a><a href="/neuromap">🧠 Neuro-map</a><a href="/associations">🗣 Mowa</a><a href="/affinity">🤝 Affinity</a><a href="/config">⚙ Konfiguracja</a><a href="/logout">Wyloguj</a></div>
+ <div class="nav"><a href="/">🏠 Przegląd</a><a href="/self">◉ SELF</a><a href="/autonomy">🧭 Autonomia</a><a href="/details">📋 Szczegóły</a><a class="active" href="/connectome">🧬 Connectome</a><a href="/neuromap">🧠 Neuro-map</a><a href="/associations">🗣 Mowa</a><a href="/affinity">🤝 Affinity</a><a href="/config">⚙ Konfiguracja</a><a href="/logout">Wyloguj</a></div>
 </div>
 
 <section class="hero">
@@ -1443,7 +1521,7 @@ h1{margin:0;font-size:24px}.sub{color:var(--muted);font-size:12px;margin-top:4px
 <body><main>
 <div class="top">
  <div class="brand"><div class="logo">🧠</div><div><h1>Fly Brain Neuro-map • Stage 34</h1><div class="sub">Neuro-map 2.0: klikalne neurony i regiony, frame-by-frame replay, realny przepływ po krawędziach FAFB oraz signed attribution bieżącej decyzji.</div></div></div>
- <div class="nav"><a href="/">🏠 Przegląd</a><a href="/autonomy">🧭 Autonomia</a><a href="/details">📋 Szczegóły</a><a href="/connectome">🧬 Connectome</a><a class="active" href="/neuromap">🧠 Neuro-map</a><a href="/associations">🗣 Mowa</a><a href="/affinity">🤝 Affinity</a><a href="/config">⚙ Konfiguracja</a><a href="/logout">Wyloguj</a></div>
+ <div class="nav"><a href="/">🏠 Przegląd</a><a href="/self">◉ SELF</a><a href="/autonomy">🧭 Autonomia</a><a href="/details">📋 Szczegóły</a><a href="/connectome">🧬 Connectome</a><a class="active" href="/neuromap">🧠 Neuro-map</a><a href="/associations">🗣 Mowa</a><a href="/affinity">🤝 Affinity</a><a href="/config">⚙ Konfiguracja</a><a href="/logout">Wyloguj</a></div>
 </div>
 
 <section class="hero">
@@ -2338,7 +2416,7 @@ font:11px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wr
 <body><main>
 <div class="top">
   <div class="brand"><div class="logo">🪰</div><div><h1>Mucha Control Center</h1><div class="sub">Windows / VPS • Discord • Connectome • Chaser • Audio</div></div></div>
-  <div class="nav"><a class="active" href="/">🏠 Przegląd</a><a href="/autonomy">🧭 Autonomia</a><a href="/details">📋 Szczegóły</a><a href="/connectome">🧬 Connectome</a><a href="/neuromap">🧠 Neuro-map</a><a href="/associations">🗣 Mowa</a><a href="/affinity">🤝 Affinity</a><a href="/config">⚙ Konfiguracja</a><a href="/api/state">JSON</a><a href="/logout">Wyloguj</a></div>
+  <div class="nav"><a class="active" href="/">🏠 Przegląd</a><a href="/self">◉ SELF</a><a href="/autonomy">🧭 Autonomia</a><a href="/details">📋 Szczegóły</a><a href="/connectome">🧬 Connectome</a><a href="/neuromap">🧠 Neuro-map</a><a href="/associations">🗣 Mowa</a><a href="/affinity">🤝 Affinity</a><a href="/config">⚙ Konfiguracja</a><a href="/api/state">JSON</a><a href="/logout">Wyloguj</a></div>
 </div>
 
 <section class="hero">
@@ -4481,6 +4559,8 @@ class WebDashboard:
         connectome_provider: ConnectomeProvider | None = None,
         neuromap_provider: NeuromapProvider | None = None,
         association_provider: AssociationProvider | None = None,
+        selfaware_provider: SelfAwareProvider | None = None,
+        selfaware_updater: SelfAwareUpdater | None = None,
         public_readonly_enabled: bool = False,
         service_unit: str = "mucha.service",
     ):
@@ -4515,6 +4595,8 @@ class WebDashboard:
         self.connectome_provider = connectome_provider
         self.neuromap_provider = neuromap_provider
         self.association_provider = association_provider
+        self.selfaware_provider = selfaware_provider
+        self.selfaware_updater = selfaware_updater
         self.public_readonly_enabled = bool(public_readonly_enabled)
         self.service_unit = str(service_unit or "mucha.service").strip()
         self.runner: web.AppRunner | None = None
@@ -4616,6 +4698,7 @@ class WebDashboard:
 
         app = web.Application(middlewares=[self._auth_middleware])
         app.router.add_get("/", self._index)
+        app.router.add_get("/self", self._self_page)
         app.router.add_get("/autonomy", self._autonomy_page)
         app.router.add_get("/details", self._details)
         app.router.add_get("/affinity", self._affinity_page)
@@ -4632,6 +4715,8 @@ class WebDashboard:
         app.router.add_post("/login", self._login_post)
         app.router.add_get("/logout", self._logout)
         app.router.add_get("/api/state", self._state)
+        app.router.add_get("/api/self", self._self_state)
+        app.router.add_post("/api/self", self._self_update)
         app.router.add_get("/api/connectome", self._connectome_state)
         app.router.add_get("/api/neuromap", self._neuromap_state)
         app.router.add_get("/api/associations", self._associations_state)
@@ -4678,6 +4763,9 @@ class WebDashboard:
             f"const LIVE_REFRESH_MS={self.refresh_ms};",
         )
         return web.Response(text=html, content_type="text/html")
+
+    async def _self_page(self, request: web.Request) -> web.Response:
+        return web.Response(text=SELF_HTML, content_type="text/html")
 
     async def _autonomy_page(self, request: web.Request) -> web.Response:
         html = AUTONOMY_HTML.replace(
@@ -4732,6 +4820,7 @@ class WebDashboard:
         for old, new in replacements:
             html = html.replace(old, new)
         for link in (
+            '<a href="/self">◉ SELF</a>',
             '<a href="/autonomy">🧭 Autonomia</a>',
             '<a href="/details">📋 Szczegóły</a>',
             '<a href="/affinity">🤝 Affinity</a>',
@@ -4945,6 +5034,29 @@ class WebDashboard:
         response = web.HTTPFound("/login")
         response.del_cookie("mucha_dashboard_session")
         return response
+
+    async def _self_state(self, request: web.Request) -> web.Response:
+        if self.selfaware_provider is None:
+            raise web.HTTPNotFound(text="self-aware provider unavailable")
+        try:
+            payload = await self.selfaware_provider()
+        except Exception as exc:
+            log.exception("SELF dashboard snapshot failed")
+            raise web.HTTPInternalServerError(text=str(exc))
+        return web.json_response(payload)
+
+    async def _self_update(self, request: web.Request) -> web.Response:
+        if self.selfaware_updater is None:
+            raise web.HTTPNotFound(text="self-aware updater unavailable")
+        try:
+            payload = await request.json()
+            result = self.selfaware_updater(payload)
+        except (ValueError, TypeError, json.JSONDecodeError) as exc:
+            return web.json_response({"ok": False, "error": str(exc)}, status=400)
+        except Exception as exc:
+            log.exception("SELF dashboard update failed")
+            return web.json_response({"ok": False, "error": str(exc)}, status=500)
+        return web.json_response(result)
 
     async def _state(self, request: web.Request) -> web.Response:
         snap = await self.snapshot_provider()
