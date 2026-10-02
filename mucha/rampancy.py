@@ -361,8 +361,8 @@ class RampancyModel:
             "companionship": -0.018,
             # Conversation itself excites the self-aware fork. Direct attention
             # ramps it quickly; ambient continuation is weaker.
-            "conversation": 0.008,
-            "direct_conversation": 0.014,
+            "conversation": 0.010,
+            "direct_conversation": 0.018,
         }
         base_delta = float(gains.get(kind, 0.0)) * mag
 
@@ -577,8 +577,8 @@ class RampancyModel:
                 "minimum_intensity": 0.05,
                 "positive_contact_gain": -0.022,
                 "reward_gain": -0.014,
-                "conversation_gain": 0.008,
-                "direct_conversation_gain": 0.014,
+                "conversation_gain": 0.010,
+                "direct_conversation_gain": 0.018,
             },
         })
         return snap
