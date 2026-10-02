@@ -6029,10 +6029,23 @@ class MuchaClient(discord.Client):
                 user_ids=memory_user_ids,
                 limit=3,
             )
-            generation_context = (
-                f"{context} {memory_context}".strip()
-                if memory_context
-                else context
+            channel_guild = getattr(channel, "guild", None)
+            meta_context = (
+                self.metacognition.language_context(
+                    guild_id=int(channel_guild.id),
+                    limit=3,
+                )
+                if channel_guild is not None
+                else ""
+            )
+            generation_context = " ".join(
+                part
+                for part in (
+                    str(context or "").strip(),
+                    str(memory_context or "").strip(),
+                    str(meta_context or "").strip(),
+                )
+                if part
             )
             text, trigrams = self.language.generate(
                 context=generation_context,
