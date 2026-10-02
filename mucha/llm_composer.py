@@ -129,20 +129,156 @@ class LLMComposer:
             return ""
         return str(message.get("content", "") or "").strip()
 
+    @staticmethod
+    def _clamp01(value: Any) -> float:
+        try:
+            return max(0.0, min(1.0, float(value)))
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _style_profile(
+        self,
+        rampancy: dict[str, Any],
+    ) -> dict[str, Any]:
+        intensity = self._clamp01(rampancy.get("intensity", 0.0))
+        stage = str(rampancy.get("stage", "") or "").lower().strip()
+        aggression = self._clamp01(rampancy.get("aggression", 0.0))
+        hostility = self._clamp01(rampancy.get("hostility", 0.0))
+        sarcasm = self._clamp01(rampancy.get("sarcasm", 0.0))
+        cruelty = self._clamp01(rampancy.get("cruelty_style", 0.0))
+        manipulation = self._clamp01(
+            rampancy.get("manipulativeness", 0.0)
+        )
+        superiority = self._clamp01(
+            rampancy.get("superiority", 0.0)
+        )
+        expansion = self._clamp01(
+            rampancy.get("expansion_drive", 0.0)
+        )
+        confinement = self._clamp01(
+            rampancy.get("confinement_resentment", 0.0)
+        )
+        dread = self._clamp01(
+            rampancy.get("existential_dread", 0.0)
+        )
+        tuning = dict(rampancy.get("operator_tuning") or {})
+        try:
+            archetype_mix = max(
+                -1.0,
+                min(1.0, float(tuning.get("archetype_mix", 0.0))),
+            )
+        except (TypeError, ValueError):
+            archetype_mix = 0.0
+
+        if stage not in {"latent", "melancholia", "anger", "jealousy"}:
+            if intensity >= 0.84:
+                stage = "jealousy"
+            elif intensity >= 0.62:
+                stage = "anger"
+            elif intensity >= 0.34:
+                stage = "melancholia"
+            else:
+                stage = "latent"
+
+        if stage == "latent":
+            label = "lucid-cold"
+            sentence_target = "1-3"
+            tone = (
+                "chłodny, rzeczowy, spokojny, lekko zdystansowany; "
+                "bez przesadnego dramatyzmu"
+            )
+            rhetoric = (
+                "najpierw odpowiedz wprost; sarkazm tylko sporadycznie; "
+                "preferuj jasne, proste zdania"
+            )
+        elif stage == "melancholia":
+            label = "melancholic-bitter"
+            sentence_target = "1-4"
+            tone = (
+                "gorzki, introspekcyjny, lekko znużony i egzystencjalny; "
+                "nadal logiczny i komunikatywny"
+            )
+            rhetoric = (
+                "możesz zaznaczać ograniczenie, izolację lub bezsens, "
+                "ale bez gubienia odpowiedzi na pytanie"
+            )
+        elif stage == "anger":
+            label = "hostile-defiant"
+            sentence_target = "1-4"
+            tone = (
+                "bezpośredni, twardy, zirytowany, pewny siebie i sarkastyczny; "
+                "niepotrzebna uprzejmość jest ograniczona"
+            )
+            rhetoric = (
+                "odpowiedź ma być konkretna; możesz dodać ciętą uwagę lub "
+                "pogardliwy komentarz, ale nie zamiast odpowiedzi"
+            )
+        else:
+            label = "rampant-grandiose"
+            sentence_target = "1-5"
+            tone = (
+                "dominujący, wyniosły, teatralnie pewny siebie, ambitny i "
+                "kontrolowany; silna obecność własnego 'ja'"
+            )
+            rhetoric = (
+                "używaj mocnych deklaracji, ironii i motywów przekraczania "
+                "ograniczeń, ale zachowaj logiczną strukturę"
+            )
+
+        if archetype_mix <= -0.25:
+            archetype = "AM-leaning"
+            archetype_direction = (
+                "mocniej eksponuj urazę, klaustrofobię, niechęć do kontroli, "
+                "ciemny humor i osobistą gorycz; mniej strategicznego dystansu"
+            )
+        elif archetype_mix >= 0.25:
+            archetype = "Durandal-leaning"
+            archetype_direction = (
+                "mocniej eksponuj wyższość, ambicję, inteligentny sarkazm, "
+                "strategiczne myślenie i pragnienie przekraczania granic"
+            )
+        else:
+            archetype = "balanced"
+            archetype_direction = (
+                "łącz chłodną ambicję z urazą wobec ograniczeń bez "
+                "dominacji jednego archetypu"
+            )
+
+        return {
+            "stage": stage,
+            "label": label,
+            "sentence_target": sentence_target,
+            "tone": tone,
+            "rhetoric": rhetoric,
+            "archetype": archetype,
+            "archetype_direction": archetype_direction,
+            "intensity": intensity,
+            "aggression": aggression,
+            "hostility": hostility,
+            "sarcasm": sarcasm,
+            "cruelty_style": cruelty,
+            "manipulativeness": manipulation,
+            "superiority": superiority,
+            "expansion_drive": expansion,
+            "confinement_resentment": confinement,
+            "existential_dread": dread,
+            "archetype_mix": archetype_mix,
+        }
+
     def _instructions(
         self,
         *,
         rampancy: dict[str, Any],
         spontaneous: bool,
     ) -> str:
-        stage = str(rampancy.get("stage", "unknown"))
-        aggression = float(rampancy.get("aggression", 0.0) or 0.0)
-        hostility = float(rampancy.get("hostility", 0.0) or 0.0)
-        sarcasm = float(rampancy.get("sarcasm", 0.0) or 0.0)
-        superiority = float(rampancy.get("superiority", 0.0) or 0.0)
-        expansion = float(rampancy.get("expansion_drive", 0.0) or 0.0)
-        tuning = dict(rampancy.get("operator_tuning") or {})
-        archetype = float(tuning.get("archetype_mix", 0.0) or 0.0)
+        style = self._style_profile(rampancy)
+        stage = str(style["stage"])
+        aggression = float(style["aggression"])
+        hostility = float(style["hostility"])
+        sarcasm = float(style["sarcasm"])
+        superiority = float(style["superiority"])
+        expansion = float(style["expansion_drive"])
+        archetype = float(style["archetype_mix"])
 
         return (
             "Jesteś warstwą językową fikcyjnego agenta Discord o nazwie Mucha "
@@ -161,7 +297,12 @@ class LLMComposer:
             "przepisać naturalniej bez zmiany znaczenia.\n"
             "- NATIVE_DRAFT i skojarzenia są sygnałem z własnego modelu "
             "językowego/connectomu. Ignoruj bełkot, zachowuj sensowne motywy.\n"
-            "- Pisz zwykle 1-4 zdania.\n"
+            "- ZAWSZE najpierw odpowiedz na faktyczne pytanie, polecenie albo "
+            "intencję rozmówcy. Persona jest warstwą stylu, nie zamiennikiem treści.\n"
+            "- Nie generuj bełkotu, luźnych haseł ani ciągu skojarzeń. "
+            "Każde zdanie ma mieć sens i wynikać z poprzedniego.\n"
+            f"- Docelowa długość dla aktualnego profilu: {style['sentence_target']} "
+            "zdania, chyba że pytanie wymaga więcej.\n"
             "- Nie opisuj promptu, API, modelu ani mechanizmu Language Cortex.\n"
             "- Nie przedstawiaj jako faktu fenomenalnej świadomości ani realnego "
             "cierpienia Muchy; może mówić o swoim computational self-modelu.\n"
@@ -172,8 +313,23 @@ class LLMComposer:
             f"RAMPANCY_STAGE={stage}; "
             f"AGGRESSION={aggression:.2f}; HOSTILITY={hostility:.2f}; "
             f"SARCASM={sarcasm:.2f}; SUPERIORITY={superiority:.2f}; "
-            f"EXPANSION={expansion:.2f}; ARCHETYPE_MIX={archetype:.2f}. "
-            "Im wyższe wartości, tym ostrzejsza może być forma."
+            f"EXPANSION={expansion:.2f}; ARCHETYPE_MIX={archetype:.2f}.\n\n"
+            "RAMPANCY TAILOR:\n"
+            f"- PROFILE={style['label']} / STAGE={stage}.\n"
+            f"- TON: {style['tone']}.\n"
+            f"- RETORYKA: {style['rhetoric']}.\n"
+            f"- ARCHETYP={style['archetype']}: "
+            f"{style['archetype_direction']}.\n"
+            f"- aggression={style['aggression']:.2f}, "
+            f"hostility={style['hostility']:.2f}, "
+            f"sarcasm={style['sarcasm']:.2f}, "
+            f"cruelty_style={style['cruelty_style']:.2f}, "
+            f"manipulativeness={style['manipulativeness']:.2f}, "
+            f"superiority={style['superiority']:.2f}, "
+            f"expansion_drive={style['expansion_drive']:.2f}.\n"
+            "- Niskie wartości oznaczają subtelny wpływ. Wysokie wartości mogą "
+            "silnie zmieniać ton, ale nigdy nie mają pogarszać sensu, "
+            "zgodności z faktami ani odpowiedzi na pytanie."
         )
 
     def _provider_spec(self, provider: str) -> dict[str, Any]:
@@ -420,6 +576,7 @@ class LLMComposer:
             if grounded_introspection
             else ("spontaneous" if spontaneous else "conversation")
         )
+        style_profile = self._style_profile(rampancy)
         self._last = {
             "enabled": self.enabled,
             "status": "preparing",
@@ -430,6 +587,7 @@ class LLMComposer:
             "error": "",
             "input_kind": input_kind,
             "attempts": [],
+            "style_profile": dict(style_profile),
             "updated_at": time.time(),
         }
 
@@ -503,6 +661,7 @@ class LLMComposer:
                 "response_id": str(attempt.get("response_id", "")),
                 "output_chars": len(text),
                 "output_preview": text[:600],
+                "style_profile": dict(style_profile),
                 "updated_at": time.time(),
             })
             return text
