@@ -18,7 +18,11 @@ from pathlib import Path
 
 import discord
 import numpy as np
-import emoji as emoji_lib
+try:
+    import emoji as emoji_lib
+except ImportError:
+    emoji_lib = None
+
 import pyttsx3
 import tomli_w
 from discord.ext import tasks
@@ -526,11 +530,16 @@ class MuchaClient(discord.Client):
             "text": "",
             "updated_at": time.time(),
         }
-        self._unicode_emojis = [
-            char
-            for char, data in emoji_lib.EMOJI_DATA.items()
-            if data.get("status") == emoji_lib.STATUS["fully_qualified"]
-        ]
+        self._unicode_emojis = (
+            [
+                char
+                for char, data in emoji_lib.EMOJI_DATA.items()
+                if data.get("status")
+                == emoji_lib.STATUS["fully_qualified"]
+            ]
+            if emoji_lib is not None
+            else []
+        )
         self._action_history: list[dict] = []
         self._reward_history: list[dict] = []
         self._last_reinforceable: dict[int, tuple[str, tuple]] = {}
