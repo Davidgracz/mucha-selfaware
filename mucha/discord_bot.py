@@ -183,6 +183,7 @@ class MuchaClient(discord.Client):
             half_life_days=45.0,
             rampancy_provider=self.rampancy,
         )
+        self._belief_revision_last_decay = time.time()
         self.self_autobiography = SelfAutobiographicalMemory(
             project_root / "state" / "self_autobiography.sqlite3",
             self.self_model,
@@ -8528,6 +8529,12 @@ class MuchaClient(discord.Client):
             return
         now = time.monotonic()
         wall_now = time.time()
+        if (
+            wall_now - float(self._belief_revision_last_decay)
+            >= 3600.0
+        ):
+            self.belief_revision.decay_all(now=wall_now)
+            self._belief_revision_last_decay = wall_now
         if await self._sleep_tick(now):
             return
         await self._maybe_memory_replay(now)
