@@ -12031,6 +12031,7 @@ class MuchaClient(discord.Client):
             and self._chaser_panic_remaining(vc.guild.id) <= 0.0
             and not (
                 self.cfg.behavior.avoid_disliked_users_on_voice
+                and not self.cfg.voice.tts_selfaware_override_enabled
                 and self._disliked_members(
                     [m for m in vc.channel.members if not m.bot]
                 )
@@ -12045,6 +12046,7 @@ class MuchaClient(discord.Client):
         last_author = self.last_text_author.get(guild.id)
         if (
             self.cfg.behavior.ignore_disliked_users_text
+            and not self.cfg.voice.tts_selfaware_override_enabled
             and last_author is not None
             and self._is_disliked_user(last_author)
         ):
