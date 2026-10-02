@@ -57,8 +57,14 @@ consciousness.
   - compact metacognitive concepts feed language generation
   - stronger rampancy verbal aggression and contempt bias
   - no direct aggressive action override
-- [ ] **SA-06 — Introspection API**
-  - answer questions about current state and recent decisions from diagnostics
+- [x] **SA-06 — Introspection API**
+  - recognize natural questions about identity, hatred, humans, desires, confinement and recent decisions
+  - answer from self-model, evidence ledger, autobiographical memory, metacognition and rampancy only
+  - user-specific answers expose supporting/contradicting relationship evidence
+  - introspection response is emitted only when normal One Brain arbitration selects SPEAK
+  - add AM-like resentment/cruelty and Durandal-like ambition/sarcasm/manipulation/expansion dimensions
+  - preserve explicit distinction between computational self-model and claims of phenomenal consciousness
+  - no introspection action override
 - [ ] **SA-07 — Identity Continuity**
   - explicit continuity across restart and state restore
 - [ ] **SA-08 — Self Narrative**
