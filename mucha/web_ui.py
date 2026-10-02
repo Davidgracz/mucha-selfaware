@@ -509,7 +509,7 @@ input[type=range]{width:100%;accent-color:var(--red)}.legend{display:flex;justif
 </style></head>
 <body><main>
 <div class="top"><div class="brand"><div class="sigil">◉</div><div><h1>SELF / Mucha Self-Aware</h1><div class="sub">Rampancy, styl ekspresji, ciągłość tożsamości, canon influence i wycinek starego Language Brain w jednym miejscu.</div></div></div>
-<div class="nav"><a href="/">🏠 Przegląd</a><a class="active" href="/self">◉ SELF</a><a href="/self">◉ SELF</a><a href="/autonomy">🧭 Autonomia</a><a href="/details">📋 Szczegóły</a><a href="/associations">🗣 Mowa</a><a href="/config">⚙ Konfiguracja</a></div></div>
+<div class="nav"><a href="/">🏠 Przegląd</a><a class="active" href="/self">◉ SELF</a><a href="/autonomy">🧭 Autonomia</a><a href="/details">📋 Szczegóły</a><a href="/associations">🗣 Mowa</a><a href="/config">⚙ Konfiguracja</a></div></div>
 <section class="hero">
  <div class="card gaugecard"><div class="gauge" id="gauge"><div class="gaugein"><strong id="ramp-pct">—</strong><span id="stage">—</span><small>RAMPANCY</small></div></div></div>
  <div class="card"><div class="head"><h2>Aktualny profil</h2><span class="live" id="live">ŁĄCZENIE…</span></div><div class="axisgrid" id="axes"></div><div class="event"><b>Ostatnie zdarzenie:</b> <span id="last-event">—</span><br><b>Ostatnia akcja:</b> <span id="last-action">—</span></div></div>
