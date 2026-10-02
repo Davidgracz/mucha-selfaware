@@ -515,6 +515,8 @@ class MuchaClient(discord.Client):
             connectome_provider=self._connectome_dashboard_snapshot,
             neuromap_provider=self._neuromap_dashboard_snapshot,
             association_provider=self._association_dashboard_snapshot,
+            selfaware_provider=self._selfaware_dashboard_snapshot,
+            selfaware_updater=self._dashboard_update_selfaware,
             public_readonly_enabled=cfg.web_ui.public_readonly_enabled,
             service_unit=cfg.web_ui.service_unit,
             host=cfg.web_ui.host,
@@ -530,6 +532,92 @@ class MuchaClient(discord.Client):
             config_provider=self._dashboard_config_snapshot,
             config_updater=self._dashboard_update_config,
         )
+
+    async def _selfaware_dashboard_snapshot(self) -> dict:
+        rampancy = self.rampancy.diagnostics()
+        rampancy_snapshot = self.rampancy.snapshot()
+        canon_state = self.introspection.canon.diagnostics(
+            rampancy_snapshot,
+            kind="state",
+        )
+        canon_desire = self.introspection.canon.diagnostics(
+            rampancy_snapshot,
+            kind="desire",
+        )
+        language_diag = self.language.diagnostics()
+        generation_trace = self.language.generation_trace()
+        words = self.language.association_words(limit=18)
+        feedback = self.language.top_word_feedback(18)
+        return {
+            "rampancy": rampancy,
+            "identity_continuity": (
+                self.identity_continuity.diagnostics()
+            ),
+            "self_model": self.self_model.diagnostics(),
+            "introspection": self.introspection.diagnostics(),
+            "canon": {
+                "state": canon_state,
+                "desire": canon_desire,
+            },
+            "language": {
+                "diagnostics": language_diag,
+                "generation_trace": generation_trace,
+                "words": words,
+                "word_feedback": feedback,
+            },
+            "reply_policy": {
+                "override_enabled": bool(
+                    self.cfg.behavior
+                    .selfaware_reply_override_enabled
+                ),
+                "introspection_override_enabled": bool(
+                    self.cfg.behavior
+                    .selfaware_introspection_override_enabled
+                ),
+                "mention_base_probability": float(
+                    self.cfg.behavior
+                    .selfaware_mention_override_base_probability
+                ),
+                "mention_rampancy_gain": float(
+                    self.cfg.behavior
+                    .selfaware_mention_override_rampancy_gain
+                ),
+                "reply_cooldown_seconds": float(
+                    self.cfg.language.reply_cooldown_seconds
+                ),
+            },
+            "last_action": self._last_brain_action,
+            "last_event": self._last_brain_event,
+        }
+
+    def _dashboard_update_selfaware(self, payload: dict) -> dict:
+        if not isinstance(payload, dict):
+            raise ValueError("payload must be an object")
+
+        if "intensity" in payload:
+            self.rampancy.set_intensity(
+                float(payload["intensity"]),
+                source="operator-ui",
+            )
+
+        tuning_payload = payload.get("tuning")
+        if tuning_payload is not None:
+            if not isinstance(tuning_payload, dict):
+                raise ValueError("tuning must be an object")
+            self.rampancy.set_operator_tuning(
+                tuning_payload,
+                source="operator-ui",
+            )
+
+        if bool(payload.get("reset_tuning", False)):
+            self.rampancy.reset_operator_tuning(
+                source="operator-ui-reset",
+            )
+
+        return {
+            "ok": True,
+            "rampancy": self.rampancy.diagnostics(),
+        }
 
     def _dashboard_config_snapshot(self) -> dict:
         brain_fields = [
@@ -10164,6 +10252,12 @@ class MuchaClient(discord.Client):
             "voice_sensory_debug": voice_sensory_rows,
             "attention": attention_debug,
             "action_policy": action_policy_debug,
+            "rampancy": self.rampancy.diagnostics(),
+            "identity_continuity": (
+                self.identity_continuity.diagnostics()
+            ),
+            "self_model": self.self_model.diagnostics(),
+            "introspection": self.introspection.diagnostics(),
             "autonomous_candidates": deepcopy(
                 self._autonomous_candidate_debug
             ),
