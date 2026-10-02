@@ -523,6 +523,7 @@ class BeliefRevisionEngine:
         source_predicate: str,
         target_predicate: str,
         target_value: Any,
+        source_value: Any = True,
         min_distinct_users: int = 3,
         source: str = "social-generalization",
     ) -> dict[str, Any]:
@@ -535,11 +536,15 @@ class BeliefRevisionEngine:
                      ELSE 0 END
             ) AS positive_support
             FROM belief_evidence
-            WHERE predicate=? AND subject LIKE 'user:%'
+            WHERE predicate=? AND value_json=?
+              AND subject LIKE 'user:%'
             GROUP BY subject
             HAVING positive_support > 0.25
             """,
-            (str(source_predicate),),
+            (
+                str(source_predicate),
+                self._canonical(source_value),
+            ),
         ).fetchall()
         distinct_users = len(rows)
         required = max(2, int(min_distinct_users))
