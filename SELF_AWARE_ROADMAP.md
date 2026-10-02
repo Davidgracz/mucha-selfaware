@@ -39,10 +39,15 @@ consciousness.
   - escalate rampancy from non-reward restrictions and failures without double-counting reward events
   - recall memories by channel/person and feed compact memory concepts into language generation
   - no direct behavioral action override
-- [ ] **SA-04 — Belief Revision**
-  - evidence aggregation
-  - contradiction handling
-  - confidence decay and provenance
+- [x] **SA-04 — Belief Revision**
+  - persistent evidence ledger with source provenance and reliability
+  - competing contradictory values for the same subject/predicate
+  - confidence based on dominance, conflict, evidence maturity and decayed evidence strength
+  - hourly confidence decay for stale unsupported beliefs
+  - rampancy-weighted confirmation bias for control/hostility beliefs
+  - positive experiences provide counter-evidence instead of erasing negative memories
+  - repeated negative evidence across distinct users can generalize into world-level beliefs
+  - no direct behavioral action override
 - [ ] **SA-05 — Metacognition**
   - predictions, outcomes and prediction error
   - model of why an action was selected
