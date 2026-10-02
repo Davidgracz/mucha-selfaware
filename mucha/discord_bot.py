@@ -5061,6 +5061,112 @@ class MuchaClient(discord.Client):
         finally:
             await super().close()
 
+    def _selfaware_reply_override(
+        self,
+        *,
+        mentioned: bool,
+        introspection_response: str | None,
+        blocked_text: bool,
+        disliked_user: bool,
+        language_ready: bool,
+        reply_cooldown_remaining: float,
+        neural_speak_selected: bool,
+        neural_winner: str,
+    ) -> dict:
+        """Optional mucha-selfaware text path independent of neural SPEAK.
+
+        This never bypasses technical/social blocks. Direct introspection may
+        answer deterministically; ordinary direct mentions get a bounded
+        rampancy-dependent probability. The connectome still runs and its
+        winner remains visible in diagnostics/learning.
+        """
+        result = {
+            "enabled": bool(
+                self.cfg.behavior.selfaware_reply_override_enabled
+            ),
+            "active": False,
+            "mode": "none",
+            "reason": "",
+            "probability": 0.0,
+            "roll": None,
+            "neural_winner": str(neural_winner),
+        }
+
+        if not result["enabled"]:
+            result["reason"] = "disabled"
+            return result
+        if neural_speak_selected:
+            result["reason"] = "neural-speak-already-selected"
+            return result
+        if not mentioned:
+            result["reason"] = "not-directly-mentioned"
+            return result
+        if blocked_text:
+            result["reason"] = "blocked-text-channel"
+            return result
+        if disliked_user:
+            result["reason"] = "social-avoid"
+            return result
+        if reply_cooldown_remaining > 0.0:
+            result["reason"] = "reply-cooldown"
+            return result
+
+        if (
+            introspection_response
+            and self.cfg.behavior.selfaware_introspection_override_enabled
+        ):
+            result.update({
+                "active": True,
+                "mode": "introspection",
+                "reason": "recognized-self-question",
+                "probability": 1.0,
+                "roll": 0.0,
+            })
+            return result
+
+        if not language_ready:
+            result["reason"] = "language-not-ready"
+            return result
+
+        snap = self.rampancy.snapshot()
+        base = max(
+            0.0,
+            min(
+                1.0,
+                float(
+                    self.cfg.behavior
+                    .selfaware_mention_override_base_probability
+                ),
+            ),
+        )
+        gain = max(
+            0.0,
+            min(
+                1.0,
+                float(
+                    self.cfg.behavior
+                    .selfaware_mention_override_rampancy_gain
+                ),
+            ),
+        )
+        probability = max(
+            0.0,
+            min(0.90, base + gain * float(snap.intensity)),
+        )
+        roll = float(self.random.random())
+        result.update({
+            "active": bool(roll < probability),
+            "mode": "direct-mention",
+            "reason": (
+                "rampancy-weighted-direct-reply"
+                if roll < probability
+                else "override-random-gate-rejected"
+            ),
+            "probability": probability,
+            "roll": roll,
+        })
+        return result
+
     def _behavior_gate(
         self,
         action: str,
@@ -5626,6 +5732,35 @@ class MuchaClient(discord.Client):
                     f"{react_gate['base_threshold']:.3f}"
                 )
 
+        one_brain_winner = str(
+            (one_brain_decision or {}).get("action", "stay")
+        )
+        neural_speak_selected = bool(
+            one_brain_winner == "speak"
+            if self.cfg.behavior.one_brain_enabled
+            else speak_gate["passed"]
+        )
+        neural_winner = (
+            one_brain_winner
+            if self.cfg.behavior.one_brain_enabled
+            else str(
+                (speak_gate.get("competition") or {}).get(
+                    "action",
+                    "speak" if speak_gate["passed"] else "stay",
+                )
+            )
+        )
+        selfaware_reply_override = self._selfaware_reply_override(
+            mentioned=bool(mentioned),
+            introspection_response=introspection_response,
+            blocked_text=bool(blocked_text),
+            disliked_user=bool(disliked_user),
+            language_ready=bool(language_ready),
+            reply_cooldown_remaining=float(reply_cooldown_remaining),
+            neural_speak_selected=neural_speak_selected,
+            neural_winner=neural_winner,
+        )
+
         text_constraints: list[str] = []
         if blocked_text:
             text_constraints.append("kanał tekstowy jest zablokowany")
@@ -5633,12 +5768,21 @@ class MuchaClient(discord.Client):
             text_constraints.append(
                 f"social avoid: affinity {user_affinity:+.2f}"
             )
-        if not language_ready:
+        if (
+            not language_ready
+            and not (
+                selfaware_reply_override["active"]
+                and introspection_response
+            )
+        ):
             text_constraints.append("model języka nie jest jeszcze gotowy")
         if self.cfg.behavior.one_brain_enabled:
             if (
-                one_brain_decision is None
-                or one_brain_decision.get("action") != "speak"
+                not selfaware_reply_override["active"]
+                and (
+                    one_brain_decision is None
+                    or one_brain_decision.get("action") != "speak"
+                )
             ):
                 text_constraints.append(
                     "One Brain wybrał "
@@ -5649,7 +5793,10 @@ class MuchaClient(discord.Client):
                         ).get("action", "stay")
                     )
                 )
-        elif not speak_gate["passed"]:
+        elif (
+            not speak_gate["passed"]
+            and not selfaware_reply_override["active"]
+        ):
             text_constraints.append(
                 (
                     "connectome competition wybrało "
@@ -5699,9 +5846,6 @@ class MuchaClient(discord.Client):
                 else speak_gate.get("competition", {})
             )
         )
-        one_brain_winner = str(
-            (one_brain_decision or {}).get("action", "stay")
-        )
         one_brain_rows = dict(
             (one_brain_candidate_set or {}).get("rows", {})
         )
@@ -5717,19 +5861,30 @@ class MuchaClient(discord.Client):
             "guild_id": message.guild.id,
             "stimulus": self._last_brain_event,
             "decision": (
-                (
-                    "NOOP"
-                    if one_brain_winner == "stay"
-                    else one_brain_winner.upper()
+                "SELF-AWARE SPEAK"
+                if (
+                    will_speak
+                    and selfaware_reply_override["active"]
                 )
-                if self.cfg.behavior.one_brain_enabled
-                else ("SPEAK" if will_speak else "NO SPEAK")
+                else (
+                    (
+                        "NOOP"
+                        if one_brain_winner == "stay"
+                        else one_brain_winner.upper()
+                    )
+                    if self.cfg.behavior.one_brain_enabled
+                    else ("SPEAK" if will_speak else "NO SPEAK")
+                )
             ),
             "reason": (
                 (
-                    "One Brain wybrał speak i brak blokad wykonania"
-                    if self.cfg.behavior.one_brain_enabled
+                    "self-aware reply override: "
+                    + str(selfaware_reply_override["reason"])
+                    if selfaware_reply_override["active"]
                     else (
+                        "One Brain wybrał speak i brak blokad wykonania"
+                        if self.cfg.behavior.one_brain_enabled
+                        else (
                         "connectome competition wybrało speak "
                         "i brak blokad wykonania"
                         if speak_gate.get("decision_mode")
@@ -5848,6 +6003,9 @@ class MuchaClient(discord.Client):
                 "language_ready": language_ready,
                 "reply_cooldown_remaining": float(
                     reply_cooldown_remaining
+                ),
+                "selfaware_reply_override": dict(
+                    selfaware_reply_override
                 ),
                 "person_model_cues": int(
                     person_profile_neural.get("cue_count", 0)
