@@ -352,6 +352,9 @@ class BeliefRevisionEngine:
         maturity = 1.0 - math.exp(
             -max(0.0, float(evidence_count)) / 4.0
         )
+        evidence_strength = 1.0 - math.exp(
+            -2.0 * max(0.0, winner_score)
+        )
         dominance = (
             winner_score / max(1e-9, total_score)
             if total_score > 0.0
@@ -367,6 +370,7 @@ class BeliefRevisionEngine:
         confidence = self._clamp01(
             dominance
             * (0.45 + 0.55 * maturity)
+            * evidence_strength
             * (1.0 - 0.42 * conflict)
         )
 
@@ -412,6 +416,7 @@ class BeliefRevisionEngine:
             ),
             "conflict": conflict,
             "evidence_count": evidence_count,
+            "evidence_strength": evidence_strength,
             "alternatives": alternatives,
             "rampancy_intensity": self._rampancy_intensity(),
             "source": source,
