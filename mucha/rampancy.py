@@ -163,6 +163,11 @@ class RampancyModel:
         source: str = "operator-ui",
     ) -> RampancySnapshot:
         self.intensity = self._clamp(value)
+        self._interaction_streak_sign = 0
+        self._interaction_streak_count = 0
+        self._last_stimulus_kind = "operator-set"
+        self._last_stimulus_delta = 0.0
+        self._last_stimulus_magnitude = 0.0
         self.updated_at = time.time()
         self._write_profile(source=source)
         return self.snapshot()
