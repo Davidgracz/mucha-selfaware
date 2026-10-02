@@ -49,6 +49,7 @@ from .episodic import VoiceEpisodicMemory
 from .identity_continuity import IdentityContinuity
 from .introspection import IntrospectionEngine
 from .language import OnlineLanguage
+from .llm_composer import LLMComposer
 from .metacognition import MetacognitionEngine
 from .rampancy import RampancyModel
 from .runtime_awareness import RuntimeAwareness
@@ -249,6 +250,20 @@ class MuchaClient(discord.Client):
             coherence_strength=cfg.language.coherence_strength,
             coherence_min_score=cfg.language.coherence_min_score,
             coherence_attempts=cfg.language.coherence_attempts,
+        )
+        self.llm_composer = LLMComposer(
+            enabled=cfg.language.llm_composer_enabled,
+            model=cfg.language.llm_model,
+            api_key_env=cfg.language.llm_api_key_env,
+            timeout_seconds=cfg.language.llm_timeout_seconds,
+            max_output_tokens=cfg.language.llm_max_output_tokens,
+            native_fallback=cfg.language.llm_native_fallback,
+            rewrite_introspection=(
+                cfg.language.llm_rewrite_introspection
+            ),
+            spontaneous_enabled=(
+                cfg.language.llm_spontaneous_enabled
+            ),
         )
         self._language_start_diag = self.language.diagnostics()
         self._stt_transcripts_since_start = 0
@@ -568,6 +583,7 @@ class MuchaClient(discord.Client):
                 "generation_trace": generation_trace,
                 "words": words,
                 "word_feedback": feedback,
+                "llm_composer": self.llm_composer.diagnostics(),
             },
             "reply_policy": {
                 "override_enabled": bool(
@@ -737,6 +753,18 @@ class MuchaClient(discord.Client):
             "connectome_word_feedback_enabled",
             "connectome_word_feedback_steps",
             "connectome_word_feedback_magnitude",
+            "coherence_enabled",
+            "coherence_strength",
+            "coherence_min_score",
+            "coherence_attempts",
+            "llm_composer_enabled",
+            "llm_model",
+            "llm_api_key_env",
+            "llm_timeout_seconds",
+            "llm_max_output_tokens",
+            "llm_native_fallback",
+            "llm_rewrite_introspection",
+            "llm_spontaneous_enabled",
         ]
         behavior_fields = [
             "attention_enabled",
@@ -1174,6 +1202,18 @@ class MuchaClient(discord.Client):
             ("language", "char_frequency_exponent"): (float, 0.1, 2.0),
             ("language", "char_arousal_flatten"): (float, 0.0, 1.0),
             ("language", "word_reward_scale"): (float, 0.0, 1.0),
+            ("language", "coherence_enabled"): (bool, None, None),
+            ("language", "coherence_strength"): (float, 0.0, 1.0),
+            ("language", "coherence_min_score"): (float, 0.0, 1.0),
+            ("language", "coherence_attempts"): (int, 1, 12),
+            ("language", "llm_composer_enabled"): (bool, None, None),
+            ("language", "llm_model"): (str, None, None),
+            ("language", "llm_api_key_env"): (str, None, None),
+            ("language", "llm_timeout_seconds"): (float, 3.0, 90.0),
+            ("language", "llm_max_output_tokens"): (int, 48, 1200),
+            ("language", "llm_native_fallback"): (bool, None, None),
+            ("language", "llm_rewrite_introspection"): (bool, None, None),
+            ("language", "llm_spontaneous_enabled"): (bool, None, None),
             ("language", "connectome_word_control_enabled"): (
                 bool, None, None
             ),
@@ -6342,6 +6382,38 @@ class MuchaClient(discord.Client):
     ) -> bool:
         if self._is_text_channel_blocked(channel):
             return False
+
+        memory_user_ids = (
+            [int(target_member.id)]
+            if target_member is not None
+            else []
+        )
+        memory_context = self.self_autobiography.language_context(
+            channel_id=getattr(channel, "id", None),
+            user_ids=memory_user_ids,
+            limit=3,
+        )
+        channel_guild = getattr(channel, "guild", None)
+        meta_context = (
+            self.metacognition.language_context(
+                guild_id=int(channel_guild.id),
+                limit=3,
+            )
+            if channel_guild is not None
+            else ""
+        )
+        generation_context = " ".join(
+            part
+            for part in (
+                str(context or "").strip(),
+                str(memory_context or "").strip(),
+                str(meta_context or "").strip(),
+            )
+            if part
+        )
+
+        native_text: str | None = None
+        trigrams: list[tuple[str, str, str]] = []
         async with self._brain_lock:
             internal = self.brain.internal_state_diagnostics()
             neural_arousal = float(
@@ -6357,51 +6429,65 @@ class MuchaClient(discord.Client):
                     + 0.25 * float(arousal),
                 ),
             )
-            memory_user_ids = (
-                [int(target_member.id)]
-                if target_member is not None
-                else []
-            )
-            memory_context = self.self_autobiography.language_context(
-                channel_id=getattr(channel, "id", None),
-                user_ids=memory_user_ids,
-                limit=3,
-            )
-            channel_guild = getattr(channel, "guild", None)
-            meta_context = (
-                self.metacognition.language_context(
-                    guild_id=int(channel_guild.id),
-                    limit=3,
-                )
-                if channel_guild is not None
-                else ""
-            )
-            generation_context = " ".join(
-                part
-                for part in (
-                    str(context or "").strip(),
-                    str(memory_context or "").strip(),
-                    str(meta_context or "").strip(),
-                )
-                if part
-            )
-            if response_override:
-                text = str(response_override)[:1900]
-                trigrams = []
-            else:
-                text, trigrams = self.language.generate(
+
+            if not response_override:
+                native_text, trigrams = self.language.generate(
                     context=generation_context,
                     arousal=effective_arousal,
                     brain_word_score=self.brain.language_word_score,
                     brain_word_feedback=self._brain_word_feedback,
                     word_bias=self.rampancy.word_bias,
                 )
-            if text:
-                self.brain.mark_language_output(text)
-                learning_trace = self.brain.capture_learning_trace()
-            else:
-                learning_trace = None
-        if not text or learning_trace is None:
+
+        grounded_text = (
+            str(response_override)[:1900]
+            if response_override
+            else None
+        )
+        fallback_text = grounded_text or native_text
+        text = fallback_text
+
+        rampancy_diag = self.rampancy.diagnostics()
+        query_kind = (
+            self.introspection.classify_query(str(context or ""))
+            or "state"
+        )
+        canon_diag = self.introspection.canon.diagnostics(
+            self.rampancy.snapshot(),
+            kind=query_kind,
+        )
+        llm_text = await self.llm_composer.compose(
+            user_message=str(context or ""),
+            recent_context=generation_context,
+            native_draft=native_text,
+            grounded_introspection=grounded_text,
+            rampancy=rampancy_diag,
+            self_state=self.self_model.diagnostics(),
+            continuity=self.identity_continuity.diagnostics(),
+            memory_context=memory_context,
+            metacognition_context=meta_context,
+            associations=self.language.association_words(limit=12),
+            canon=canon_diag,
+            target_name=(
+                str(target_member.display_name)
+                if target_member is not None
+                else ""
+            ),
+            spontaneous=(target_member is None),
+        )
+        if llm_text:
+            text = llm_text
+        elif not self.llm_composer.native_fallback and not grounded_text:
+            text = None
+
+        if not text:
+            return False
+
+        async with self._brain_lock:
+            self.brain.mark_language_output(text)
+            learning_trace = self.brain.capture_learning_trace()
+
+        if learning_trace is None:
             return False
         try:
             sent = await channel.send(text, allowed_mentions=discord.AllowedMentions.none())
