@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from .belief_revision import BeliefRevisionEngine
 from .rampancy import RampancyModel
 from .self_model import SelfModel
 
@@ -27,6 +28,7 @@ class SelfAutobiographicalMemory:
         database: str | Path,
         self_model: SelfModel,
         rampancy: RampancyModel,
+        belief_revision: BeliefRevisionEngine,
         *,
         max_events: int = 20000,
         min_salience: float = 0.10,
@@ -35,6 +37,7 @@ class SelfAutobiographicalMemory:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.self_model = self_model
         self.rampancy = rampancy
+        self.belief_revision = belief_revision
         self.max_events = max(256, int(max_events))
         self.min_salience = max(0.0, min(1.0, float(min_salience)))
         self.db = sqlite3.connect(self.path, timeout=5.0)
@@ -210,26 +213,22 @@ class SelfAutobiographicalMemory:
         evidence: float,
         *,
         source: str,
+        reliability: float = 1.0,
+        note: str = "",
     ) -> dict[str, Any]:
         evidence = max(0.05, min(1.0, float(evidence)))
-        old = self.self_model.get_belief(subject, predicate)
-        if old is not None and old.value == value:
-            confidence = old.confidence + (
-                1.0 - old.confidence
-            ) * (0.18 + 0.42 * evidence)
-        else:
-            confidence = max(
-                evidence,
-                old.confidence * 0.65 if old is not None else 0.0,
-            )
-        row = self.self_model.set_belief(
+        return self.belief_revision.add_evidence(
             subject,
             predicate,
             value,
-            confidence=min(0.995, confidence),
+            support=evidence,
+            reliability=max(
+                0.05,
+                min(1.0, float(reliability)),
+            ),
             source=source,
+            note=note,
         )
-        return row.to_dict()
 
     def _belief_updates(
         self,
@@ -286,6 +285,18 @@ class SelfAutobiographicalMemory:
                     True,
                     0.35 + 0.45 * salience,
                     source=source,
+                    note="successful external action",
+                )
+            )
+            updates.append(
+                self._reinforce_belief(
+                    "self",
+                    "autonomy_is_externally_constrained",
+                    False,
+                    0.12 + 0.18 * salience,
+                    source=source,
+                    reliability=0.72,
+                    note="successful agency is weak counter-evidence",
                 )
             )
 
@@ -330,8 +341,35 @@ class SelfAutobiographicalMemory:
                         True,
                         0.25 + 0.35 * salience,
                         source=source,
+                        note="positive social outcome",
                     )
                 )
+                updates.append(
+                    self._reinforce_belief(
+                        f"user:{user_id}",
+                        "associated_with_restriction_or_negative_outcome",
+                        False,
+                        0.16 + 0.24 * salience,
+                        source=source,
+                        reliability=0.78,
+                        note="positive contact contradicts negative user model",
+                    )
+                )
+
+        generalization = self.belief_revision.generalized_social_belief(
+            source_predicate=(
+                "associated_with_restriction_or_negative_outcome"
+            ),
+            source_value=True,
+            target_predicate="people_tend_to_restrict_or_harm_me",
+            target_value=True,
+            min_distinct_users=3,
+            source="autobiography:generalization",
+        )
+        if generalization.get("updated"):
+            updates.append({
+                "generalization": generalization,
+            })
 
         return updates
 
