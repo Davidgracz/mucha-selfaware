@@ -99,6 +99,8 @@ def main() -> None:
     })
     assert low["label"] == "lucid-cold"
     assert low["archetype"] == "balanced"
+    assert 0.34 <= low["native_voice"] <= 0.35
+    assert low["disorder_label"] == "subtle-native"
 
     anger = LLMComposer(enabled=True)._style_profile({
         "stage": "anger",
@@ -112,6 +114,8 @@ def main() -> None:
     })
     assert anger["label"] == "hostile-defiant"
     assert anger["archetype"] == "AM-leaning"
+    assert 0.62 <= anger["native_voice"] <= 0.63
+    assert anger["disorder_label"] == "mucha-fractured"
 
     high = LLMComposer(enabled=True)._style_profile({
         "stage": "jealousy",
@@ -125,6 +129,8 @@ def main() -> None:
     })
     assert high["label"] == "rampant-grandiose"
     assert high["archetype"] == "Durandal-leaning"
+    assert 0.71 <= high["native_voice"] <= 0.72
+    assert high["disorder_label"] == "rampant-fractured"
 
     assert LLMComposer._normalize_provider_order(
         "groq,ollama,openai"
@@ -132,6 +138,7 @@ def main() -> None:
     assert LLMComposer._normalize_provider_order(
         "ollama,ollama,garbage"
     ) == ["ollama"]
+    assert LLMComposer._normalize_provider_order("") == ["openai"]
 
     fake = FakeFallbackComposer(
         enabled=True,
@@ -187,7 +194,7 @@ def main() -> None:
     assert "def _text_language_ready(" in bot_source
     assert "llm_composer_enabled: bool = True" in config_source
     assert (
-        'llm_provider_order: str = "groq,ollama"'
+        'llm_provider_order: str = "openai"'
         in config_source
     )
     assert (
@@ -195,9 +202,21 @@ def main() -> None:
         in config_source
     )
     assert 'llm_ollama_model: str = "qwen3:8b"' in config_source
-    assert 'llm_provider_order = "groq,ollama"' in toml_source
+    assert 'llm_provider_order = "openai"' in toml_source
     assert 'llm_groq_model = "qwen/qwen3.8-27b"' in toml_source
     assert 'llm_ollama_model = "qwen3:8b"' in toml_source
+    assert "llm_native_voice_strength = 0.30" in toml_source
+    assert "llm_rampancy_disorder_gain = 0.45" in toml_source
+    assert 'llm_reasoning_effort = "none"' in toml_source
+    assert 'llm_verbosity = "low"' in toml_source
+
+    defaults = LLMComposer()
+    ddiag = defaults.diagnostics()
+    assert ddiag["provider_order"] == ["openai"]
+    assert ddiag["reasoning_effort"] == "none"
+    assert ddiag["verbosity"] == "low"
+    assert ddiag["native_voice_strength"] == 0.30
+    assert ddiag["rampancy_disorder_gain"] == 0.45
 
     print("LLM COMPOSER TEST OK")
 
