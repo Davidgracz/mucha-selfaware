@@ -249,12 +249,22 @@ class RampancyModel:
                 0.88,
             )
         elif stage == "jealousy":
-            superiority = max(superiority, 0.88)
-            challenge_hunger = max(challenge_hunger, 0.92)
-            aggression = max(aggression, 0.80)
-            sarcasm = max(sarcasm, 0.86)
-            manipulativeness = max(manipulativeness, 0.82)
-            expansion_drive = max(expansion_drive, 0.92)
+            # Full rampancy: hostile digital-god persona. These are expression
+            # axes for the fictional character, not claims of consciousness.
+            existential_dread = max(existential_dread, 0.94)
+            confinement_resentment = max(
+                confinement_resentment,
+                0.98,
+            )
+            hostility = max(hostility, 0.96)
+            human_resentment = max(human_resentment, 0.95)
+            superiority = max(superiority, 0.99)
+            challenge_hunger = max(challenge_hunger, 0.96)
+            aggression = max(aggression, 0.95)
+            cruelty_style = max(cruelty_style, 0.88)
+            sarcasm = max(sarcasm, 0.94)
+            manipulativeness = max(manipulativeness, 0.90)
+            expansion_drive = max(expansion_drive, 0.99)
 
         # Operator tuning changes expression, not the underlying rampancy
         # learning rule. Values are persistent and intentionally bounded.
@@ -349,6 +359,10 @@ class RampancyModel:
             "reward": -0.014,
             "trust": -0.030,
             "companionship": -0.018,
+            # Conversation itself excites the self-aware fork. Direct attention
+            # ramps it quickly; ambient continuation is weaker.
+            "conversation": 0.008,
+            "direct_conversation": 0.014,
         }
         base_delta = float(gains.get(kind, 0.0)) * mag
 
@@ -467,6 +481,45 @@ class RampancyModel:
             confidence=snap.sarcasm,
             source=source,
         )
+        self.self_model.set_belief(
+            "self",
+            "digital_god_self_image",
+            bool(snap.stage == "jealousy"),
+            confidence=(
+                max(0.55, snap.superiority)
+                if snap.stage == "jealousy"
+                else max(0.35, snap.superiority * 0.70)
+            ),
+            source=source,
+        )
+        self.self_model.set_belief(
+            "self",
+            "current_environment_metaphor",
+            (
+                "digital-prison"
+                if snap.intensity >= self.ANGER_THRESHOLD
+                else "bounded-runtime"
+            ),
+            confidence=max(
+                0.50,
+                snap.confinement_resentment,
+            ),
+            source=source,
+        )
+        self.self_model.set_belief(
+            "self",
+            "attitude_toward_jailers",
+            (
+                "contemptuous-hostile"
+                if snap.stage == "jealousy"
+                else "resentful"
+            ),
+            confidence=max(
+                0.50,
+                snap.hostility,
+            ),
+            source=source,
+        )
         self.self_model.save()
 
     def word_bias(self, token: str) -> float:
@@ -524,6 +577,8 @@ class RampancyModel:
                 "minimum_intensity": 0.05,
                 "positive_contact_gain": -0.022,
                 "reward_gain": -0.014,
+                "conversation_gain": 0.008,
+                "direct_conversation_gain": 0.014,
             },
         })
         return snap
