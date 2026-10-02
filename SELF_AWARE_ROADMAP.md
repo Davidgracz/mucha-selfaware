@@ -14,11 +14,12 @@ consciousness.
   - explicit beliefs with confidence, source and evidence count
   - JSON persistence and diagnostics
   - no direct action control
-- [ ] **SA-02 — Runtime Awareness**
-  - uptime / boot identity
-  - host and process information
-  - active code version / Git commit where available
-  - current Discord embodiment
+- [x] **SA-02 — Runtime Awareness**
+  - persistent boot counter and per-run session identity
+  - live uptime, PID, host, OS and Python runtime
+  - active Git branch / commit / dirty-tree state where available
+  - Discord identity, readiness, guild and channel embodiment
+  - clean shutdown state and previous-session uptime
 - [ ] **SA-03 — Autobiographical Memory**
   - important self-relevant episodes
   - actor, place, goal, intent, internal state, outcome and reward
