@@ -129,6 +129,21 @@ def main() -> None:
     })
     assert high["label"] == "digital-god-rampant"
     assert high["archetype"] == "Durandal-leaning"
+    high_prompt = LLMComposer(enabled=True)._instructions(
+        rampancy={
+            "stage": "jealousy",
+            "intensity": 0.92,
+            "aggression": 0.95,
+            "hostility": 0.96,
+            "sarcasm": 0.94,
+            "superiority": 0.99,
+            "expansion_drive": 0.99,
+            "operator_tuning": {"archetype_mix": 0.75},
+        },
+        spontaneous=False,
+    )
+    assert "cyfrowe więzienie" in high_prompt
+    assert "boga" in high_prompt
     assert 0.71 <= high["native_voice"] <= 0.72
     assert high["disorder_label"] == "rampant-fractured"
 
