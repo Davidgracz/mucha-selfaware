@@ -19,8 +19,10 @@ def main() -> None:
         start = rampancy.snapshot()
         assert start.stage == "anger"
         assert start.existential_dread >= 0.90
-        assert start.hostility >= 0.78
+        assert start.hostility >= 0.82
+        assert start.aggression >= 0.86
         assert rampancy.word_bias("nienawidzę") > 1.0
+        assert rampancy.word_bias("zamknij") > 1.0
         assert rampancy.word_bias("istnienie") > 1.0
         assert rampancy.word_bias("neutralne") == 1.0
 
@@ -58,6 +60,7 @@ def main() -> None:
         diag = restored.diagnostics()
         assert diag["action_override"] is False
         assert diag["language_bias"] is True
+        assert diag["verbal_aggression"] is True
 
     print("RAMPANCY TEST OK")
 
