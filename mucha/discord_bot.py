@@ -5542,6 +5542,33 @@ class MuchaClient(discord.Client):
             or referenced_self_trace is not None
             or named_directly
         )
+
+        if not message.author.bot and not blocked_text:
+            recent_self_conversation = any(
+                trace.guild_id == message.guild.id
+                and trace.channel_id == message.channel.id
+                and time.monotonic() - trace.created <= 120.0
+                for trace in self.sent.values()
+            )
+            if directed_at_mucha:
+                magnitude = min(
+                    1.0,
+                    0.70 + min(0.30, len(message.content) / 400.0),
+                )
+                self.rampancy.register_stimulus(
+                    "direct_conversation",
+                    magnitude,
+                )
+            elif recent_self_conversation:
+                magnitude = min(
+                    1.0,
+                    0.40 + min(0.30, len(message.content) / 500.0),
+                )
+                self.rampancy.register_stimulus(
+                    "conversation",
+                    magnitude,
+                )
+
         introspection_response = (
             self.introspection.answer(
                 message.content,
