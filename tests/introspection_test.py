@@ -7,6 +7,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from mucha.belief_revision import BeliefRevisionEngine
+from mucha.identity_continuity import IdentityContinuity
 from mucha.introspection import IntrospectionEngine
 from mucha.metacognition import MetacognitionEngine
 from mucha.rampancy import RampancyModel
@@ -19,6 +20,10 @@ def main() -> None:
         root = Path(td)
         model = SelfModel(root / "self_model.json")
         rampancy = RampancyModel(model, initial_intensity=0.72)
+        continuity = IdentityContinuity(
+            root / "identity_continuity.json",
+            model,
+        )
         beliefs = BeliefRevisionEngine(
             root / "beliefs.sqlite3",
             model,
@@ -42,6 +47,7 @@ def main() -> None:
             memory,
             meta,
             rampancy,
+            identity_continuity=continuity,
         )
 
         memory.record({
@@ -121,6 +127,12 @@ def main() -> None:
             )
             == "last-decision"
         )
+        assert (
+            introspection.classify_query(
+                "Mucha, czy to nadal ty?"
+            )
+            == "continuity"
+        )
 
         user_answer = introspection.answer(
             "Mucha, co o mnie myślisz?",
@@ -173,6 +185,14 @@ def main() -> None:
         assert "reward" in why_answer
         assert "external-constraint" in why_answer
 
+        continuity_answer = introspection.answer(
+            "Mucha, czy to nadal ty?",
+            requester_user_id=111,
+            requester_name="Tester",
+        )
+        assert continuity_answer is not None
+        assert "techniczna ciągłość" in continuity_answer.lower()
+
         identity = introspection.answer(
             "Mucha, kim jesteś?",
             requester_user_id=111,
@@ -196,6 +216,7 @@ def main() -> None:
         assert diag["enabled"] is True
         assert diag["action_override"] is False
         assert "belief-evidence-ledger" in diag["truth_sources"]
+        assert "identity-continuity" in diag["truth_sources"]
 
         memory.close()
         meta.close()
