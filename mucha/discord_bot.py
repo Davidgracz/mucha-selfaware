@@ -5333,6 +5333,7 @@ class MuchaClient(discord.Client):
         self,
         *,
         directed_at_mucha: bool,
+        force_reply: bool,
         introspection_response: str | None,
         blocked_text: bool,
         disliked_user: bool,
@@ -5366,17 +5367,31 @@ class MuchaClient(discord.Client):
         if neural_speak_selected:
             result["reason"] = "neural-speak-already-selected"
             return result
-        if not directed_at_mucha:
+        if not directed_at_mucha and not force_reply:
             result["reason"] = "not-directed-at-mucha"
             return result
         if blocked_text:
             result["reason"] = "blocked-text-channel"
             return result
-        if disliked_user:
-            result["reason"] = "social-avoid"
-            return result
         if reply_cooldown_remaining > 0.0:
             result["reason"] = "reply-cooldown"
+            return result
+
+        if force_reply:
+            if not language_ready and not introspection_response:
+                result["reason"] = "language-not-ready"
+                return result
+            result.update({
+                "active": True,
+                "mode": "reply-to-all",
+                "reason": "self-aware-reply-to-all",
+                "probability": 1.0,
+                "roll": 0.0,
+            })
+            return result
+
+        if disliked_user:
+            result["reason"] = "social-avoid"
             return result
 
         if (
@@ -5588,6 +5603,12 @@ class MuchaClient(discord.Client):
             or referenced_self_trace is not None
             or named_directly
         )
+        reply_to_all = bool(
+            self.cfg.behavior.selfaware_reply_to_all_enabled
+            and not message.author.bot
+            and not blocked_text
+        )
+        reply_target = bool(directed_at_mucha or reply_to_all)
 
         if not message.author.bot and not blocked_text:
             recent_self_conversation = any(
@@ -5596,7 +5617,7 @@ class MuchaClient(discord.Client):
                 and time.monotonic() - trace.created <= 120.0
                 for trace in self.sent.values()
             )
-            if directed_at_mucha:
+            if reply_target:
                 magnitude = min(
                     1.0,
                     0.70 + min(0.30, len(message.content) / 400.0),
@@ -5631,7 +5652,7 @@ class MuchaClient(discord.Client):
                     )
                 ),
             )
-            if directed_at_mucha
+            if reply_target
             else None
         )
         channel_name = getattr(message.channel, "name", str(message.channel.id))
@@ -6068,6 +6089,7 @@ class MuchaClient(discord.Client):
         )
         selfaware_reply_override = self._selfaware_reply_override(
             directed_at_mucha=bool(directed_at_mucha),
+            force_reply=bool(reply_to_all),
             introspection_response=introspection_response,
             blocked_text=bool(blocked_text),
             disliked_user=bool(disliked_user),
@@ -6080,7 +6102,7 @@ class MuchaClient(discord.Client):
         text_constraints: list[str] = []
         if blocked_text:
             text_constraints.append("kanał tekstowy jest zablokowany")
-        if disliked_user:
+        if disliked_user and not reply_to_all:
             text_constraints.append(
                 f"social avoid: affinity {user_affinity:+.2f}"
             )
