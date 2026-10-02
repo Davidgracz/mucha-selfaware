@@ -356,20 +356,30 @@ class SelfAutobiographicalMemory:
                     )
                 )
 
-        generalization = self.belief_revision.generalized_social_belief(
-            source_predicate=(
-                "associated_with_restriction_or_negative_outcome"
-            ),
-            source_value=True,
-            target_predicate="people_tend_to_restrict_or_harm_me",
-            target_value=True,
-            min_distinct_users=3,
-            source="autobiography:generalization",
-        )
-        if generalization.get("updated"):
-            updates.append({
-                "generalization": generalization,
-            })
+        if category in {
+            "social-rejection",
+            "restriction",
+            "forced-removal",
+            "threat",
+        }:
+            generalization = (
+                self.belief_revision.generalized_social_belief(
+                    source_predicate=(
+                        "associated_with_restriction_or_negative_outcome"
+                    ),
+                    source_value=True,
+                    target_predicate=(
+                        "people_tend_to_restrict_or_harm_me"
+                    ),
+                    target_value=True,
+                    min_distinct_users=3,
+                    source="autobiography:generalization",
+                )
+            )
+            if generalization.get("updated"):
+                updates.append({
+                    "generalization": generalization,
+                })
 
         return updates
 
