@@ -243,7 +243,6 @@ class LLMComposer:
             "instructions": instructions,
             "input": input_text,
             "max_output_tokens": self.max_output_tokens,
-            "store": False,
         }
         timeout = aiohttp.ClientTimeout(total=self.timeout_seconds)
         started = time.perf_counter()
