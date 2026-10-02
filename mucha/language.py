@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import math
 import random
 import re
@@ -132,6 +133,15 @@ class OnlineLanguage:
         self._init_schema()
         self._bootstrap_from_legacy_words()
         self._bootstrap_word_model_from_legacy()
+        project_root = Path(__file__).resolve().parents[1]
+        self._bootstrap_corpus_file(
+            project_root / "data" / "rampancy_seed.txt",
+            source="rampancy-seed",
+        )
+        self._bootstrap_corpus_file(
+            project_root / "data" / "local_rampancy_corpus.txt",
+            source="local-rampancy-corpus",
+        )
 
     def _init_schema(self) -> None:
         self.db.executescript(
@@ -167,6 +177,14 @@ class OnlineLanguage:
             CREATE TABLE IF NOT EXISTS char_stats(
                 k TEXT PRIMARY KEY,
                 v INTEGER NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS corpus_bootstrap(
+                k TEXT PRIMARY KEY,
+                digest TEXT NOT NULL,
+                imported_lines INTEGER NOT NULL DEFAULT 0,
+                imported_chars INTEGER NOT NULL DEFAULT 0,
+                updated_at REAL NOT NULL DEFAULT 0
             );
 
             CREATE TABLE IF NOT EXISTS word_unigram(
@@ -474,6 +492,94 @@ class OnlineLanguage:
         )
         self.db.commit()
 
+    def _bootstrap_corpus_file(
+        self,
+        path: str | Path,
+        *,
+        source: str,
+        max_lines: int = 5000,
+        max_chars: int = 500000,
+    ) -> dict:
+        """Import a text corpus once per content digest.
+
+        The tracked rampancy seed is original project text. The optional local
+        corpus is intentionally untracked so a user may add material they are
+        entitled to use without committing it to the repository.
+        """
+        corpus_path = Path(path)
+        if not corpus_path.exists() or not corpus_path.is_file():
+            return {
+                "source": str(source),
+                "path": str(corpus_path),
+                "status": "missing",
+                "imported_lines": 0,
+                "imported_chars": 0,
+            }
+
+        raw = corpus_path.read_bytes()
+        digest = hashlib.sha256(raw).hexdigest()
+        marker = "corpus:" + str(source).strip().lower()
+        row = self.db.execute(
+            "SELECT digest, imported_lines, imported_chars "
+            "FROM corpus_bootstrap WHERE k=?",
+            (marker,),
+        ).fetchone()
+        if row and str(row[0]) == digest:
+            return {
+                "source": str(source),
+                "path": str(corpus_path),
+                "status": "already-loaded",
+                "digest": digest,
+                "imported_lines": int(row[1]),
+                "imported_chars": int(row[2]),
+            }
+
+        text = raw.decode("utf-8", errors="replace")
+        imported_lines = 0
+        imported_chars = 0
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if imported_lines >= max(1, int(max_lines)):
+                break
+            remaining = max(0, int(max_chars) - imported_chars)
+            if remaining <= 0:
+                break
+            line = line[:remaining]
+            learned = self.learn(line)
+            if learned <= 0:
+                continue
+            imported_lines += 1
+            imported_chars += learned
+
+        self.db.execute(
+            "INSERT INTO corpus_bootstrap("
+            "k,digest,imported_lines,imported_chars,updated_at"
+            ") VALUES(?,?,?,?,?) "
+            "ON CONFLICT(k) DO UPDATE SET "
+            "digest=excluded.digest,"
+            "imported_lines=excluded.imported_lines,"
+            "imported_chars=excluded.imported_chars,"
+            "updated_at=excluded.updated_at",
+            (
+                marker,
+                digest,
+                imported_lines,
+                imported_chars,
+                time.time(),
+            ),
+        )
+        self.db.commit()
+        return {
+            "source": str(source),
+            "path": str(corpus_path),
+            "status": "loaded",
+            "digest": digest,
+            "imported_lines": imported_lines,
+            "imported_chars": imported_chars,
+        }
+
     @staticmethod
     def normalize(text: str) -> str:
         text = MENTION_RE.sub(" @user ", text)
@@ -688,6 +794,19 @@ class OnlineLanguage:
             ),
             "legacy_bootstrap_chars": int(legacy_chars_row[0]) if legacy_chars_row else 0,
             "legacy_bootstrap_items": int(legacy_items_row[0]) if legacy_items_row else 0,
+            "seed_corpora": [
+                {
+                    "key": str(row[0]),
+                    "digest": str(row[1]),
+                    "imported_lines": int(row[2]),
+                    "imported_chars": int(row[3]),
+                    "updated_at": float(row[4]),
+                }
+                for row in self.db.execute(
+                    "SELECT k,digest,imported_lines,imported_chars,updated_at "
+                    "FROM corpus_bootstrap ORDER BY k"
+                ).fetchall()
+            ],
             "ready": self.ready(),
         }
 
