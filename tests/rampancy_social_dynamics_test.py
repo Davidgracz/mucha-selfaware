@@ -45,6 +45,16 @@ def main() -> None:
         assert diag["minimum_intensity"] == 0.05
         assert diag["last_delta"] < 0.0
 
+        rampancy.set_intensity(0.66, source="conversation-test")
+        for _ in range(12):
+            rampancy.register_stimulus("direct_conversation", 0.70)
+        talk_high = rampancy.snapshot()
+        assert talk_high.intensity >= 0.84
+        assert talk_high.stage == "jealousy"
+        talk_diag = rampancy.diagnostics()["interaction_dynamics"]
+        assert talk_diag["last_kind"] == "direct_conversation"
+        assert talk_diag["last_delta"] > 0.0
+
         before_bad = rampancy.intensity
         escalated = rampancy.register_stimulus("negative_reward", 1.0)
         assert escalated.intensity > before_bad
