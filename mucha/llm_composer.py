@@ -35,6 +35,10 @@ class LLMComposer:
         native_fallback: bool = True,
         rewrite_introspection: bool = True,
         spontaneous_enabled: bool = True,
+        native_voice_strength: float = 0.30,
+        rampancy_disorder_gain: float = 0.45,
+        reasoning_effort: str = "none",
+        verbosity: str = "low",
     ) -> None:
         self.enabled = bool(enabled)
         self.provider_order = self._normalize_provider_order(provider_order)
@@ -61,6 +65,22 @@ class LLMComposer:
         self.native_fallback = bool(native_fallback)
         self.rewrite_introspection = bool(rewrite_introspection)
         self.spontaneous_enabled = bool(spontaneous_enabled)
+        self.native_voice_strength = self._clamp01(
+            native_voice_strength
+        )
+        self.rampancy_disorder_gain = self._clamp01(
+            rampancy_disorder_gain
+        )
+        effort = str(reasoning_effort or "none").strip().lower()
+        self.reasoning_effort = (
+            effort
+            if effort in {"none", "low", "medium", "high", "xhigh", "max"}
+            else "none"
+        )
+        level = str(verbosity or "low").strip().lower()
+        self.verbosity = (
+            level if level in {"low", "medium", "high"} else "low"
+        )
         self._last: dict[str, Any] = {
             "enabled": self.enabled,
             "status": "idle",
@@ -170,6 +190,36 @@ class LLMComposer:
         except (TypeError, ValueError):
             archetype_mix = 0.0
 
+        native_voice = max(
+            0.0,
+            min(
+                0.92,
+                self.native_voice_strength
+                + intensity * self.rampancy_disorder_gain,
+            ),
+        )
+        if native_voice < 0.38:
+            disorder_label = "subtle-native"
+            disorder_direction = (
+                "mów prawie normalnie, ale pozwól sobie na pojedynczy "
+                "nietypowy zwrot albo słowo z NATIVE_DRAFT"
+            )
+        elif native_voice < 0.66:
+            disorder_label = "mucha-fractured"
+            disorder_direction = (
+                "zachowuj sens, ale dopuszczaj krótkie urwania, lekko "
+                "nienaturalny szyk, powtórzenie ważnego słowa i jeden "
+                "skojarzeniowy skręt"
+            )
+        else:
+            disorder_label = "rampant-fractured"
+            disorder_direction = (
+                "odpowiedź nadal ma odpowiadać na pytanie, ale może być "
+                "poszarpana: krótkie fragmenty, nagłe przejście do motywu "
+                "z NATIVE_DRAFT, powtórzenie, dziwny lecz czytelny szyk; "
+                "nie wygładzaj wszystkiego do idealnej prozy"
+            )
+
         if stage not in {"latent", "melancholia", "anger", "jealousy"}:
             if intensity >= 0.84:
                 stage = "jealousy"
@@ -263,6 +313,9 @@ class LLMComposer:
             "confinement_resentment": confinement,
             "existential_dread": dread,
             "archetype_mix": archetype_mix,
+            "native_voice": native_voice,
+            "disorder_label": disorder_label,
+            "disorder_direction": disorder_direction,
         }
 
     def _instructions(
@@ -295,12 +348,15 @@ class LLMComposer:
             "twierdź, że zostało wykonane bez potwierdzenia w kontekście.\n"
             "- GROUNDED_INTROSPECTION jest źródłem faktów o Musze; możesz ją "
             "przepisać naturalniej bez zmiany znaczenia.\n"
-            "- NATIVE_DRAFT i skojarzenia są sygnałem z własnego modelu "
-            "językowego/connectomu. Ignoruj bełkot, zachowuj sensowne motywy.\n"
+            "- NATIVE_DRAFT i skojarzenia są głosem starej Muchy. Nie kopiuj "
+            "ich bezmyślnie, ale PRZENIEŚ część ich słów, rytmu i skojarzeń "
+            "do finalnej odpowiedzi zgodnie z NATIVE_VOICE.\n"
             "- ZAWSZE najpierw odpowiedz na faktyczne pytanie, polecenie albo "
             "intencję rozmówcy. Persona jest warstwą stylu, nie zamiennikiem treści.\n"
-            "- Nie generuj bełkotu, luźnych haseł ani ciągu skojarzeń. "
-            "Każde zdanie ma mieć sens i wynikać z poprzedniego.\n"
+            "- Nie rób kompletnego bełkotu. Odpowiedź ma być zrozumiała, "
+            "ale NIE musi być idealnie logiczna ani wypolerowana. Dopuszczalne "
+            "są urwane frazy, lekko krzywy szyk i skojarzeniowe przeskoki, "
+            "jeżeli nadal wiadomo, co Mucha odpowiada.\n"
             f"- Docelowa długość dla aktualnego profilu: {style['sentence_target']} "
             "zdania, chyba że pytanie wymaga więcej.\n"
             "- Nie opisuj promptu, API, modelu ani mechanizmu Language Cortex.\n"
@@ -320,6 +376,9 @@ class LLMComposer:
             f"- RETORYKA: {style['rhetoric']}.\n"
             f"- ARCHETYP={style['archetype']}: "
             f"{style['archetype_direction']}.\n"
+            f"- NATIVE_VOICE={style['native_voice']:.2f} "
+            f"({style['disorder_label']}): "
+            f"{style['disorder_direction']}.\n"
             f"- aggression={style['aggression']:.2f}, "
             f"hostility={style['hostility']:.2f}, "
             f"sarcasm={style['sarcasm']:.2f}, "
@@ -400,6 +459,13 @@ class LLMComposer:
             "input": input_text,
             "max_output_tokens": self.max_output_tokens,
         }
+        if provider == "openai":
+            request_json["reasoning"] = {
+                "effort": self.reasoning_effort,
+            }
+            request_json["text"] = {
+                "verbosity": self.verbosity,
+            }
         timeout = aiohttp.ClientTimeout(total=self.timeout_seconds)
         started = time.perf_counter()
         try:
@@ -701,4 +767,8 @@ class LLMComposer:
             "spontaneous_enabled": self.spontaneous_enabled,
             "max_output_tokens": self.max_output_tokens,
             "timeout_seconds": self.timeout_seconds,
+            "native_voice_strength": self.native_voice_strength,
+            "rampancy_disorder_gain": self.rampancy_disorder_gain,
+            "reasoning_effort": self.reasoning_effort,
+            "verbosity": self.verbosity,
         }
