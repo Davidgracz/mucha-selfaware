@@ -222,8 +222,21 @@ def main() -> None:
     assert 'llm_ollama_model = "qwen3:8b"' in toml_source
     assert "llm_native_voice_strength = 0.30" in toml_source
     assert "llm_rampancy_disorder_gain = 0.45" in toml_source
+    assert "llm_rampancy_native_only_below = 0.34" in toml_source
+    assert "llm_rampancy_full_above = 0.84" in toml_source
     assert 'llm_reasoning_effort = "none"' in toml_source
     assert 'llm_verbosity = "low"' in toml_source
+
+    blend = LLMComposer(
+        rampancy_native_only_below=0.34,
+        rampancy_full_above=0.84,
+    )
+    assert blend.llm_probability_for_rampancy(0.10) == 0.0
+    assert blend.llm_probability_for_rampancy(0.34) == 0.0
+    mid = blend.llm_probability_for_rampancy(0.59)
+    assert 0.49 < mid < 0.51
+    assert blend.llm_probability_for_rampancy(0.84) == 1.0
+    assert blend.llm_probability_for_rampancy(1.0) == 1.0
 
     defaults = LLMComposer()
     ddiag = defaults.diagnostics()
@@ -232,6 +245,8 @@ def main() -> None:
     assert ddiag["verbosity"] == "low"
     assert ddiag["native_voice_strength"] == 0.30
     assert ddiag["rampancy_disorder_gain"] == 0.45
+    assert ddiag["rampancy_native_only_below"] == 0.34
+    assert ddiag["rampancy_full_above"] == 0.84
 
     print("LLM COMPOSER TEST OK")
 
