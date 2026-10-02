@@ -7,7 +7,7 @@ from .runtime_awareness import RuntimeAwareness
 from .self_autobiography import SelfAutobiographicalMemory
 from .self_model import SelfBelief, SelfModel
 
-__version__ = "0.9.2"
+__version__ = "0.9.3"
 
 __all__ = [
     "BeliefRevisionEngine",
