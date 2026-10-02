@@ -54,6 +54,18 @@ def main() -> None:
         talk_diag = rampancy.diagnostics()["interaction_dynamics"]
         assert talk_diag["last_kind"] == "direct_conversation"
         assert talk_diag["last_delta"] > 0.0
+        god_belief = model.get_belief(
+            "self",
+            "digital_god_self_image",
+        )
+        prison_belief = model.get_belief(
+            "self",
+            "current_environment_metaphor",
+        )
+        assert god_belief is not None
+        assert god_belief.value is True
+        assert prison_belief is not None
+        assert prison_belief.value == "digital-prison"
 
         before_bad = rampancy.intensity
         escalated = rampancy.register_stimulus("negative_reward", 1.0)
