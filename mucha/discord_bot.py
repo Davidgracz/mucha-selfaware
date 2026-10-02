@@ -46,6 +46,7 @@ from .connectome import Connectome
 from .console_ui import ConsoleBrainUI
 from .episodic import VoiceEpisodicMemory
 from .language import OnlineLanguage
+from .rampancy import RampancyModel
 from .runtime_awareness import RuntimeAwareness
 from .self_model import SelfModel
 from .voice_sensory import VoiceSensoryBus
@@ -170,6 +171,10 @@ class MuchaClient(discord.Client):
             project_root=project_root,
         )
         self.runtime_awareness.observe_startup()
+        self.rampancy = RampancyModel(
+            self.self_model,
+            initial_intensity=0.66,
+        )
         self.connectome = Connectome.load(cfg.brain.connectome_dir)
         self.brain = FlyBrain(self.connectome, cfg.brain)
         self.language = OnlineLanguage(
@@ -5950,6 +5955,7 @@ class MuchaClient(discord.Client):
                 arousal=effective_arousal,
                 brain_word_score=self.brain.language_word_score,
                 brain_word_feedback=self._brain_word_feedback,
+                word_bias=self.rampancy.word_bias,
             )
             if text:
                 self.brain.mark_language_output(text)
