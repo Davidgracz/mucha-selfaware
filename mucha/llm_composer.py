@@ -21,7 +21,7 @@ class LLMComposer:
         self,
         *,
         enabled: bool = True,
-        provider_order: str = "groq,ollama",
+        provider_order: str = "openai",
         groq_model: str = "qwen/qwen3.8-27b",
         groq_api_key_env: str = "GROQ_API_KEY",
         groq_base_url: str = "https://api.groq.com/openai/v1",
@@ -105,7 +105,7 @@ class LLMComposer:
         for item in parts:
             if item in cls.SUPPORTED_PROVIDERS and item not in result:
                 result.append(item)
-        return result or ["groq", "ollama"]
+        return result or ["openai"]
 
     @staticmethod
     def _clip(value: Any, limit: int) -> str:
