@@ -245,6 +245,10 @@ class MuchaClient(discord.Client):
             connectome_word_control_candidates=(
                 cfg.language.connectome_word_control_candidates
             ),
+            coherence_enabled=cfg.language.coherence_enabled,
+            coherence_strength=cfg.language.coherence_strength,
+            coherence_min_score=cfg.language.coherence_min_score,
+            coherence_attempts=cfg.language.coherence_attempts,
         )
         self._language_start_diag = self.language.diagnostics()
         self._stt_transcripts_since_start = 0
