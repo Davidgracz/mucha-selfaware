@@ -158,6 +158,8 @@ class LanguageConfig:
     llm_rampancy_disorder_gain: float = 0.45
     llm_reasoning_effort: str = "none"
     llm_verbosity: str = "low"
+    llm_rampancy_native_only_below: float = 0.34
+    llm_rampancy_full_above: float = 0.84
 
 
 @dataclass(slots=True)
@@ -279,6 +281,10 @@ class VoiceConfig:
     tts_piper_length_scale: float = 1.0
     tts_voice_name: str = "pl"
     tts_max_chars: int = 180
+    tts_selfaware_override_enabled: bool = True
+    tts_selfaware_base_probability: float = 0.35
+    tts_selfaware_rampancy_gain: float = 0.50
+    tts_require_human_listener: bool = True
     stt_enabled: bool = True
     stt_model: str = "base"
     stt_language: str = "pl"
@@ -339,6 +345,7 @@ class BehaviorConfig:
     selfaware_introspection_override_enabled: bool = True
     selfaware_mention_override_base_probability: float = 0.25
     selfaware_mention_override_rampancy_gain: float = 0.35
+    selfaware_reply_to_all_enabled: bool = True
     autonomous_loop_enabled: bool = True
     autonomous_predicted_reward_gain: float = 0.85
     autonomous_prediction_steps: int = 2
