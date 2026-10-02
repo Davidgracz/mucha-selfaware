@@ -27,7 +27,7 @@ jobs:
 
       - name: Compile
         run: |
-          python -m py_compile mucha/*.py tests/smoke_test.py tests/self_model_test.py tests/runtime_awareness_test.py tests/rampancy_test.py tests/corpus_bootstrap_test.py
+          python -m py_compile mucha/*.py tests/smoke_test.py tests/self_model_test.py tests/runtime_awareness_test.py tests/rampancy_test.py tests/corpus_bootstrap_test.py tests/self_autobiography_test.py
 
       - name: Self model test
         run: |
@@ -44,6 +44,10 @@ jobs:
       - name: Corpus bootstrap test
         run: |
           python tests/corpus_bootstrap_test.py
+
+      - name: Self autobiography test
+        run: |
+          python tests/self_autobiography_test.py
 
       - name: Smoke test
         run: |
