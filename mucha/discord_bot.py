@@ -6622,55 +6622,87 @@ class MuchaClient(discord.Client):
                 ),
             )
 
-            if not response_override:
-                native_text, trigrams = self.language.generate(
-                    context=generation_context,
-                    arousal=effective_arousal,
-                    brain_word_score=self.brain.language_word_score,
-                    brain_word_feedback=self._brain_word_feedback,
-                    word_bias=self.rampancy.word_bias,
-                )
+            native_text, trigrams = self.language.generate(
+                context=generation_context,
+                arousal=effective_arousal,
+                brain_word_score=self.brain.language_word_score,
+                brain_word_feedback=self._brain_word_feedback,
+                word_bias=self.rampancy.word_bias,
+            )
 
         grounded_text = (
             str(response_override)[:1900]
             if response_override
             else None
         )
-        fallback_text = grounded_text or native_text
+        fallback_text = native_text or grounded_text
         text = fallback_text
 
         rampancy_diag = self.rampancy.diagnostics()
-        query_kind = (
-            self.introspection.classify_query(str(context or ""))
-            or "state"
+        llm_probability = self.llm_composer.llm_probability_for_rampancy(
+            rampancy_diag
         )
-        canon_diag = self.introspection.canon.diagnostics(
-            self.rampancy.snapshot(),
-            kind=query_kind,
+        llm_roll = float(self.random.random())
+        use_llm = bool(
+            llm_probability >= 1.0
+            or (
+                llm_probability > 0.0
+                and llm_roll < llm_probability
+            )
         )
-        llm_text = await self.llm_composer.compose(
-            user_message=str(context or ""),
-            recent_context=generation_context,
-            native_draft=native_text,
-            grounded_introspection=grounded_text,
-            rampancy=rampancy_diag,
-            self_state=self.self_model.diagnostics(),
-            continuity=self.identity_continuity.diagnostics(),
-            memory_context=memory_context,
-            metacognition_context=meta_context,
-            associations=self.language.association_words(limit=12),
-            canon=canon_diag,
-            target_name=(
-                str(target_member.display_name)
-                if target_member is not None
-                else ""
-            ),
-            spontaneous=(target_member is None),
-        )
-        if llm_text:
-            text = llm_text
-        elif not self.llm_composer.native_fallback and not grounded_text:
-            text = None
+        if (
+            native_text is None
+            and self.llm_composer.ready_hint(
+                spontaneous=(target_member is None)
+            )
+        ):
+            use_llm = True
+
+        self._language_route_debug = {
+            "rampancy": float(rampancy_diag.get("intensity", 0.0)),
+            "llm_probability": float(llm_probability),
+            "roll": float(llm_roll),
+            "selected": "llm" if use_llm else "native",
+            "native_available": bool(native_text),
+            "grounded_introspection": bool(grounded_text),
+            "updated_at": time.time(),
+        }
+
+        if use_llm:
+            query_kind = (
+                self.introspection.classify_query(str(context or ""))
+                or "state"
+            )
+            canon_diag = self.introspection.canon.diagnostics(
+                self.rampancy.snapshot(),
+                kind=query_kind,
+            )
+            llm_text = await self.llm_composer.compose(
+                user_message=str(context or ""),
+                recent_context=generation_context,
+                native_draft=native_text,
+                grounded_introspection=grounded_text,
+                rampancy=rampancy_diag,
+                self_state=self.self_model.diagnostics(),
+                continuity=self.identity_continuity.diagnostics(),
+                memory_context=memory_context,
+                metacognition_context=meta_context,
+                associations=self.language.association_words(limit=12),
+                canon=canon_diag,
+                target_name=(
+                    str(target_member.display_name)
+                    if target_member is not None
+                    else ""
+                ),
+                spontaneous=(target_member is None),
+            )
+            if llm_text:
+                text = llm_text
+                self._language_route_debug["selected"] = "llm"
+            elif not self.llm_composer.native_fallback and not grounded_text:
+                text = None
+            else:
+                self._language_route_debug["selected"] = "native-fallback"
 
         if not text:
             return False
