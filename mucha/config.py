@@ -140,7 +140,7 @@ class LanguageConfig:
     coherence_min_score: float = 0.52
     coherence_attempts: int = 5
     llm_composer_enabled: bool = True
-    llm_provider_order: str = "groq,ollama"
+    llm_provider_order: str = "openai"
     llm_groq_model: str = "qwen/qwen3.8-27b"
     llm_groq_api_key_env: str = "GROQ_API_KEY"
     llm_groq_base_url: str = "https://api.groq.com/openai/v1"
@@ -154,6 +154,10 @@ class LanguageConfig:
     llm_native_fallback: bool = True
     llm_rewrite_introspection: bool = True
     llm_spontaneous_enabled: bool = True
+    llm_native_voice_strength: float = 0.30
+    llm_rampancy_disorder_gain: float = 0.45
+    llm_reasoning_effort: str = "none"
+    llm_verbosity: str = "low"
 
 
 @dataclass(slots=True)
