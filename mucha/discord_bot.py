@@ -47,6 +47,7 @@ from .connectome import Connectome
 from .console_ui import ConsoleBrainUI
 from .episodic import VoiceEpisodicMemory
 from .language import OnlineLanguage
+from .metacognition import MetacognitionEngine
 from .rampancy import RampancyModel
 from .runtime_awareness import RuntimeAwareness
 from .self_autobiography import SelfAutobiographicalMemory
@@ -184,6 +185,12 @@ class MuchaClient(discord.Client):
             rampancy_provider=self.rampancy,
         )
         self._belief_revision_last_decay = time.time()
+        self.metacognition = MetacognitionEngine(
+            project_root / "state" / "metacognition.sqlite3",
+            self.self_model,
+            self.belief_revision,
+            self.rampancy,
+        )
         self.self_autobiography = SelfAutobiographicalMemory(
             project_root / "state" / "self_autobiography.sqlite3",
             self.self_model,
@@ -2108,6 +2115,14 @@ class MuchaClient(discord.Client):
                 )
                 else "reward",
                 min(1.0, reward_value),
+            )
+
+        if guild is not None:
+            self.metacognition.observe_outcome(
+                guild_id=int(guild.id),
+                action=action,
+                actual_reward=reward_value,
+                source=str(source or ""),
             )
 
         self._reward_history.append({
@@ -5022,6 +5037,7 @@ class MuchaClient(discord.Client):
             )
             self.brain.save()
             self.self_autobiography.close()
+            self.metacognition.close()
             self.belief_revision.close()
             self.language.close()
         finally:
@@ -8394,9 +8410,14 @@ class MuchaClient(discord.Client):
                 competition.get("runner_up", "none")
             ),
             "source": str(decision.get("source", "")),
+            "channel_id": (
+                int(channel_id) if channel_id is not None else None
+            ),
+            "user_ids": [int(x) for x in user_ids],
             "candidates": candidates,
         }
         self._one_brain_history.append(entry)
+        self.metacognition.observe_decision(entry)
         self._one_brain_debug = {
             "stage": "25",
             "enabled": bool(self.cfg.behavior.one_brain_enabled),
@@ -8467,6 +8488,8 @@ class MuchaClient(discord.Client):
         competition = dict(decision.get("competition", {}))
         entry = {
             "time": float(execution.get("time", time.time())),
+            "kind": "autonomous",
+            "decision_context": "autonomous-loop",
             "guild_id": int(plan.get("guild_id", 0)),
             "guild": str(plan.get("guild", "")),
             "action": str(decision.get("action", "stay")),
@@ -8498,6 +8521,11 @@ class MuchaClient(discord.Client):
                 competition.get("runner_up", "none")
             ),
             "tie_break": competition.get("tie_break"),
+            "channel_id": plan.get("current_voice_id"),
+            "user_ids": [
+                int(x)
+                for x in plan.get("current_user_ids", []) or []
+            ],
             "candidates": candidates,
             "repeat_count": 1,
         }
@@ -8521,6 +8549,7 @@ class MuchaClient(discord.Client):
             ) + 1
             return
         self._autonomous_history.append(entry)
+        self.metacognition.observe_decision(entry)
 
     @tasks.loop(seconds=5)
     async def idle_loop(self):
