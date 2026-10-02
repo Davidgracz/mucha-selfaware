@@ -1862,12 +1862,22 @@ class MuchaClient(discord.Client):
                 self.cfg.language.llm_rampancy_disorder_gain
             )
         )
-        self.llm_composer.reasoning_effort = str(
+        effort = str(
             self.cfg.language.llm_reasoning_effort
         ).strip().lower()
-        self.llm_composer.verbosity = str(
+        self.llm_composer.reasoning_effort = (
+            effort
+            if effort in {"none", "low", "medium", "high", "xhigh", "max"}
+            else "none"
+        )
+        verbosity = str(
             self.cfg.language.llm_verbosity
         ).strip().lower()
+        self.llm_composer.verbosity = (
+            verbosity
+            if verbosity in {"low", "medium", "high"}
+            else "low"
+        )
         self.voice_episodes.semantic_memory_enabled = bool(
             self.cfg.voice.semantic_memory_enabled
         )
