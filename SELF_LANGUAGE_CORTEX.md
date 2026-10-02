@@ -4,7 +4,7 @@ This feature exists only in `mucha-selfaware`.
 
 ## Default provider chain
 
-    Groq -> Ollama -> OpenAI -> native Mucha
+    Groq -> Ollama -> native Mucha
 
 Default models:
 
@@ -47,14 +47,15 @@ If desired:
 
     OPENAI_API_KEY=...
 
-OpenAI is last in the default provider order, so it is never used when Groq or
-Ollama succeeds.
+OpenAI is not in the default provider order. To enable it manually, use:
+
+    llm_provider_order = "groq,ollama,openai"
 
 ## Configuration
 
 ```toml
 llm_composer_enabled = true
-llm_provider_order = "groq,ollama,openai"
+llm_provider_order = "groq,ollama"
 
 llm_groq_model = "qwen/qwen3.8-27b"
 llm_groq_api_key_env = "GROQ_API_KEY"
