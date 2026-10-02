@@ -40,6 +40,7 @@ try:
 except ImportError:
     WhisperModel = None
 
+from .belief_revision import BeliefRevisionEngine
 from .brain import FlyBrain
 from .config import Config
 from .connectome import Connectome
@@ -176,10 +177,17 @@ class MuchaClient(discord.Client):
             self.self_model,
             initial_intensity=0.66,
         )
+        self.belief_revision = BeliefRevisionEngine(
+            project_root / "state" / "belief_revision.sqlite3",
+            self.self_model,
+            half_life_days=45.0,
+            rampancy_provider=self.rampancy,
+        )
         self.self_autobiography = SelfAutobiographicalMemory(
             project_root / "state" / "self_autobiography.sqlite3",
             self.self_model,
             self.rampancy,
+            self.belief_revision,
             min_salience=float(
                 cfg.voice.autobiographical_min_salience
             ),
@@ -5013,6 +5021,7 @@ class MuchaClient(discord.Client):
             )
             self.brain.save()
             self.self_autobiography.close()
+            self.belief_revision.close()
             self.language.close()
         finally:
             await super().close()
