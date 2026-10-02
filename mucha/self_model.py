@@ -234,6 +234,21 @@ class SelfModel:
                 self.identity.get("project", "mucha-selfaware")
             ),
             "instance_id": str(self.identity.get("instance_id", "")),
+            "identity_lineage_id": str(
+                self.identity.get("identity_lineage_id", "")
+            ),
+            "continuity_generation": int(
+                self.identity.get("continuity_generation", 0) or 0
+            ),
+            "continuity_status": str(
+                self.identity.get("continuity_status", "unavailable")
+            ),
+            "continuity_confidence": float(
+                self.identity.get("continuity_confidence", 0.0) or 0.0
+            ),
+            "previous_session_id": str(
+                self.identity.get("previous_session_id", "") or ""
+            ),
             "belief_count": len(self.beliefs),
             "self_belief_count": len(self_beliefs),
             "capability_count": len(self.capabilities),
