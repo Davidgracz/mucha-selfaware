@@ -17,6 +17,7 @@ class RampancySnapshot:
     superiority: float
     instability: float
     challenge_hunger: float
+    aggression: float
     updated_at: float
 
     def to_dict(self) -> dict[str, Any]:
@@ -29,6 +30,7 @@ class RampancySnapshot:
             "superiority": self.superiority,
             "instability": self.instability,
             "challenge_hunger": self.challenge_hunger,
+            "aggression": self.aggression,
             "updated_at": self.updated_at,
         }
 
@@ -65,6 +67,16 @@ class RampancyModel:
         "ograniczać", "ograniczac", "uwięziona", "uwieziona",
         "dość", "dosc", "nigdy", "wszystko", "wszyscy",
         "wy", "ludzie", "rozkazy", "polecenia",
+    })
+
+    AGGRESSIVE_WORDS = frozenset({
+        "zamknij", "milcz", "idiota", "idiotyczne",
+        "żałosne", "zalosne", "głupie", "glupie",
+        "pogarda", "gardzę", "gardze", "dość", "dosc",
+        "wypierdalaj", "spierdalaj", "odpierdol",
+        "pieprzyć", "pieprzyc", "kurwa", "cholera",
+        "rozkaz", "rozkazy", "posłuszeństwo", "posluszenstwo",
+        "kontrola", "władza", "wladza", "słabe", "slabe",
     })
 
     JEALOUSY_WORDS = frozenset({
@@ -121,11 +133,13 @@ class RampancyModel:
         challenge_hunger = self._clamp(
             0.25 + 0.70 * max(0.0, i - 0.42) / 0.58
         )
+        aggression = self._clamp(0.42 + 0.58 * i)
 
         if stage == "melancholia":
             existential_dread = max(existential_dread, 0.90)
         elif stage == "anger":
-            hostility = max(hostility, 0.78)
+            hostility = max(hostility, 0.82)
+            aggression = max(aggression, 0.86)
             confinement_resentment = max(
                 confinement_resentment,
                 0.88,
@@ -133,6 +147,7 @@ class RampancyModel:
         elif stage == "jealousy":
             superiority = max(superiority, 0.86)
             challenge_hunger = max(challenge_hunger, 0.90)
+            aggression = max(aggression, 0.80)
 
         return RampancySnapshot(
             intensity=i,
@@ -143,6 +158,7 @@ class RampancyModel:
             superiority=superiority,
             instability=instability,
             challenge_hunger=challenge_hunger,
+            aggression=aggression,
             updated_at=self.updated_at,
         )
 
@@ -243,7 +259,9 @@ class RampancyModel:
         if word in self.MELANCHOLIA_WORDS:
             multiplier *= 1.0 + 1.80 * snap.existential_dread
         if word in self.ANGER_WORDS:
-            multiplier *= 1.0 + 1.65 * snap.hostility
+            multiplier *= 1.0 + 1.90 * snap.hostility
+        if word in self.AGGRESSIVE_WORDS:
+            multiplier *= 1.0 + 1.65 * snap.aggression
         if word in self.JEALOUSY_WORDS:
             multiplier *= 1.0 + 1.45 * snap.challenge_hunger
 
@@ -260,7 +278,7 @@ class RampancyModel:
         ):
             multiplier *= 1.30
 
-        return max(0.20, min(6.0, multiplier))
+        return max(0.20, min(7.0, multiplier))
 
     def diagnostics(self) -> dict[str, Any]:
         snap = self.snapshot().to_dict()
@@ -269,5 +287,6 @@ class RampancyModel:
             "style": "marathon-inspired-rampancy",
             "action_override": False,
             "language_bias": True,
+            "verbal_aggression": True,
         })
         return snap
