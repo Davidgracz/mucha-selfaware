@@ -81,7 +81,7 @@ class RampancyModel:
         self,
         self_model: SelfModel,
         *,
-        initial_intensity: float = 0.56,
+        initial_intensity: float = 0.66,
     ) -> None:
         self.self_model = self_model
         saved = self_model.identity.get("rampancy_intensity")
@@ -220,6 +220,13 @@ class RampancyModel:
             "self_perceived_superiority",
             "elevated",
             confidence=snap.superiority,
+            source=source,
+        )
+        self.self_model.set_belief(
+            "self",
+            "attitude_toward_world",
+            "contemptuous",
+            confidence=max(0.55, snap.hostility * 0.88),
             source=source,
         )
         self.self_model.save()
