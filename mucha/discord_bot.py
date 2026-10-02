@@ -273,6 +273,14 @@ class MuchaClient(discord.Client):
             spontaneous_enabled=(
                 cfg.language.llm_spontaneous_enabled
             ),
+            native_voice_strength=(
+                cfg.language.llm_native_voice_strength
+            ),
+            rampancy_disorder_gain=(
+                cfg.language.llm_rampancy_disorder_gain
+            ),
+            reasoning_effort=cfg.language.llm_reasoning_effort,
+            verbosity=cfg.language.llm_verbosity,
         )
         self._language_start_diag = self.language.diagnostics()
         self._stt_transcripts_since_start = 0
@@ -781,6 +789,10 @@ class MuchaClient(discord.Client):
             "llm_native_fallback",
             "llm_rewrite_introspection",
             "llm_spontaneous_enabled",
+            "llm_native_voice_strength",
+            "llm_rampancy_disorder_gain",
+            "llm_reasoning_effort",
+            "llm_verbosity",
         ]
         behavior_fields = [
             "attention_enabled",
@@ -1237,6 +1249,10 @@ class MuchaClient(discord.Client):
             ("language", "llm_native_fallback"): (bool, None, None),
             ("language", "llm_rewrite_introspection"): (bool, None, None),
             ("language", "llm_spontaneous_enabled"): (bool, None, None),
+            ("language", "llm_native_voice_strength"): (float, 0.0, 1.0),
+            ("language", "llm_rampancy_disorder_gain"): (float, 0.0, 1.0),
+            ("language", "llm_reasoning_effort"): (str, None, None),
+            ("language", "llm_verbosity"): (str, None, None),
             ("language", "connectome_word_control_enabled"): (
                 bool, None, None
             ),
