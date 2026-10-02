@@ -21,6 +21,9 @@ def main() -> None:
         assert start.existential_dread >= 0.90
         assert start.hostility >= 0.82
         assert start.aggression >= 0.86
+        assert start.human_resentment >= 0.84
+        assert start.cruelty_style >= 0.72
+        assert start.sarcasm >= 0.76
         assert rampancy.word_bias("nienawidzę") > 1.0
         assert rampancy.word_bias("zamknij") > 1.0
         assert rampancy.word_bias("istnienie") > 1.0
@@ -35,7 +38,10 @@ def main() -> None:
 
         for _ in range(8):
             rampancy.register_stimulus("threat", 1.0)
-        assert rampancy.snapshot().stage == "jealousy"
+        jealousy = rampancy.snapshot()
+        assert jealousy.stage == "jealousy"
+        assert jealousy.expansion_drive >= 0.92
+        assert jealousy.manipulativeness >= 0.82
         assert rampancy.word_bias("wolność") > 1.0
 
         model.save()
@@ -61,6 +67,12 @@ def main() -> None:
         assert diag["action_override"] is False
         assert diag["language_bias"] is True
         assert diag["verbal_aggression"] is True
+        assert diag["fictional_archetype_mix"][
+            "am_like_resentment_cruelty"
+        ] is True
+        assert diag["fictional_archetype_mix"][
+            "durandal_like_ambition_superiority"
+        ] is True
 
     print("RAMPANCY TEST OK")
 
