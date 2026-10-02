@@ -139,6 +139,14 @@ class LanguageConfig:
     coherence_strength: float = 0.82
     coherence_min_score: float = 0.52
     coherence_attempts: int = 5
+    llm_composer_enabled: bool = True
+    llm_model: str = "gpt-6-luna"
+    llm_api_key_env: str = "OPENAI_API_KEY"
+    llm_timeout_seconds: float = 25.0
+    llm_max_output_tokens: int = 220
+    llm_native_fallback: bool = True
+    llm_rewrite_introspection: bool = True
+    llm_spontaneous_enabled: bool = True
 
 
 @dataclass(slots=True)
