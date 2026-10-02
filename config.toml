@@ -131,6 +131,17 @@ coherence_strength = 0.82
 coherence_min_score = 0.52
 coherence_attempts = 5
 
+# SELF Language Cortex. If OPENAI_API_KEY is missing or the request fails,
+# Mucha falls back to her native connectome/word-model generator.
+llm_composer_enabled = true
+llm_model = "gpt-6-luna"
+llm_api_key_env = "OPENAI_API_KEY"
+llm_timeout_seconds = 25.0
+llm_max_output_tokens = 220
+llm_native_fallback = true
+llm_rewrite_introspection = true
+llm_spontaneous_enabled = true
+
 [voice]
 enabled = true
 poll_seconds = 15
