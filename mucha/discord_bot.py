@@ -281,6 +281,12 @@ class MuchaClient(discord.Client):
             ),
             reasoning_effort=cfg.language.llm_reasoning_effort,
             verbosity=cfg.language.llm_verbosity,
+            rampancy_native_only_below=(
+                cfg.language.llm_rampancy_native_only_below
+            ),
+            rampancy_full_above=(
+                cfg.language.llm_rampancy_full_above
+            ),
         )
         self._language_start_diag = self.language.diagnostics()
         self._stt_transcripts_since_start = 0
@@ -793,6 +799,8 @@ class MuchaClient(discord.Client):
             "llm_rampancy_disorder_gain",
             "llm_reasoning_effort",
             "llm_verbosity",
+            "llm_rampancy_native_only_below",
+            "llm_rampancy_full_above",
         ]
         behavior_fields = [
             "attention_enabled",
@@ -812,6 +820,7 @@ class MuchaClient(discord.Client):
             "selfaware_introspection_override_enabled",
             "selfaware_mention_override_base_probability",
             "selfaware_mention_override_rampancy_gain",
+            "selfaware_reply_to_all_enabled",
             "autonomous_loop_enabled",
             "autonomous_predicted_reward_gain",
             "autonomous_prediction_steps",
@@ -970,6 +979,10 @@ class MuchaClient(discord.Client):
             "tts_enabled",
             "tts_interval_seconds",
             "tts_volume",
+            "tts_selfaware_override_enabled",
+            "tts_selfaware_base_probability",
+            "tts_selfaware_rampancy_gain",
+            "tts_require_human_listener",
             "stt_enabled",
             "stt_model",
             "stt_language",
@@ -1253,6 +1266,12 @@ class MuchaClient(discord.Client):
             ("language", "llm_rampancy_disorder_gain"): (float, 0.0, 1.0),
             ("language", "llm_reasoning_effort"): (str, None, None),
             ("language", "llm_verbosity"): (str, None, None),
+            ("language", "llm_rampancy_native_only_below"): (
+                float, 0.0, 1.0
+            ),
+            ("language", "llm_rampancy_full_above"): (
+                float, 0.0, 1.0
+            ),
             ("language", "connectome_word_control_enabled"): (
                 bool, None, None
             ),
@@ -1294,6 +1313,21 @@ class MuchaClient(discord.Client):
             ),
             ("behavior", "one_brain_prediction_steps"): (
                 int, 0, 8
+            ),
+            ("behavior", "selfaware_reply_override_enabled"): (
+                bool, None, None
+            ),
+            ("behavior", "selfaware_introspection_override_enabled"): (
+                bool, None, None
+            ),
+            ("behavior", "selfaware_mention_override_base_probability"): (
+                float, 0.0, 1.0
+            ),
+            ("behavior", "selfaware_mention_override_rampancy_gain"): (
+                float, 0.0, 1.0
+            ),
+            ("behavior", "selfaware_reply_to_all_enabled"): (
+                bool, None, None
             ),
             ("behavior", "autonomous_loop_enabled"): (
                 bool, None, None
@@ -1659,6 +1693,18 @@ class MuchaClient(discord.Client):
             ("voice", "tts_enabled"): (bool, None, None),
             ("voice", "tts_interval_seconds"): (int, 1, 3600),
             ("voice", "tts_volume"): (float, 0.0, 2.0),
+            ("voice", "tts_selfaware_override_enabled"): (
+                bool, None, None
+            ),
+            ("voice", "tts_selfaware_base_probability"): (
+                float, 0.0, 1.0
+            ),
+            ("voice", "tts_selfaware_rampancy_gain"): (
+                float, 0.0, 1.0
+            ),
+            ("voice", "tts_require_human_listener"): (
+                bool, None, None
+            ),
             ("voice", "stt_enabled"): (bool, None, None),
             ("voice", "stt_model"): (str, None, None),
             ("voice", "stt_language"): (str, None, None),
