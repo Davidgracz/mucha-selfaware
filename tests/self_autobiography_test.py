@@ -6,6 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from mucha.belief_revision import BeliefRevisionEngine
 from mucha.rampancy import RampancyModel
 from mucha.self_autobiography import SelfAutobiographicalMemory
 from mucha.self_model import SelfModel
@@ -44,10 +45,16 @@ def main() -> None:
 
         model = SelfModel(self_path)
         rampancy = RampancyModel(model, initial_intensity=0.66)
+        beliefs = BeliefRevisionEngine(
+            root / "belief_revision.sqlite3",
+            model,
+            rampancy_provider=rampancy,
+        )
         memory = SelfAutobiographicalMemory(
             db_path,
             model,
             rampancy,
+            beliefs,
             min_salience=0.10,
         )
 
@@ -125,18 +132,26 @@ def main() -> None:
         assert diag["categories"]["social-rejection"] == 1
 
         memory.close()
+        beliefs.close()
 
         restored_model = SelfModel(self_path)
         restored_rampancy = RampancyModel(restored_model)
+        restored_beliefs = BeliefRevisionEngine(
+            root / "belief_revision.sqlite3",
+            restored_model,
+            rampancy_provider=restored_rampancy,
+        )
         restored = SelfAutobiographicalMemory(
             db_path,
             restored_model,
             restored_rampancy,
+            restored_beliefs,
         )
         rows = restored.recent(10)
         assert len(rows) == 3
         assert any(row["category"] == "restriction" for row in rows)
         restored.close()
+        restored_beliefs.close()
 
     print("SELF AUTOBIOGRAPHY TEST OK")
 
