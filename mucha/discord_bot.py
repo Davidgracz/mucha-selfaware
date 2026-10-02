@@ -253,8 +253,17 @@ class MuchaClient(discord.Client):
         )
         self.llm_composer = LLMComposer(
             enabled=cfg.language.llm_composer_enabled,
-            model=cfg.language.llm_model,
-            api_key_env=cfg.language.llm_api_key_env,
+            provider_order=cfg.language.llm_provider_order,
+            groq_model=cfg.language.llm_groq_model,
+            groq_api_key_env=cfg.language.llm_groq_api_key_env,
+            groq_base_url=cfg.language.llm_groq_base_url,
+            ollama_model=cfg.language.llm_ollama_model,
+            ollama_base_url=cfg.language.llm_ollama_base_url,
+            openai_model=cfg.language.llm_openai_model,
+            openai_api_key_env=(
+                cfg.language.llm_openai_api_key_env
+            ),
+            openai_base_url=cfg.language.llm_openai_base_url,
             timeout_seconds=cfg.language.llm_timeout_seconds,
             max_output_tokens=cfg.language.llm_max_output_tokens,
             native_fallback=cfg.language.llm_native_fallback,
@@ -758,8 +767,15 @@ class MuchaClient(discord.Client):
             "coherence_min_score",
             "coherence_attempts",
             "llm_composer_enabled",
-            "llm_model",
-            "llm_api_key_env",
+            "llm_provider_order",
+            "llm_groq_model",
+            "llm_groq_api_key_env",
+            "llm_groq_base_url",
+            "llm_ollama_model",
+            "llm_ollama_base_url",
+            "llm_openai_model",
+            "llm_openai_api_key_env",
+            "llm_openai_base_url",
             "llm_timeout_seconds",
             "llm_max_output_tokens",
             "llm_native_fallback",
@@ -1207,8 +1223,15 @@ class MuchaClient(discord.Client):
             ("language", "coherence_min_score"): (float, 0.0, 1.0),
             ("language", "coherence_attempts"): (int, 1, 12),
             ("language", "llm_composer_enabled"): (bool, None, None),
-            ("language", "llm_model"): (str, None, None),
-            ("language", "llm_api_key_env"): (str, None, None),
+            ("language", "llm_provider_order"): (str, None, None),
+            ("language", "llm_groq_model"): (str, None, None),
+            ("language", "llm_groq_api_key_env"): (str, None, None),
+            ("language", "llm_groq_base_url"): (str, None, None),
+            ("language", "llm_ollama_model"): (str, None, None),
+            ("language", "llm_ollama_base_url"): (str, None, None),
+            ("language", "llm_openai_model"): (str, None, None),
+            ("language", "llm_openai_api_key_env"): (str, None, None),
+            ("language", "llm_openai_base_url"): (str, None, None),
             ("language", "llm_timeout_seconds"): (float, 3.0, 90.0),
             ("language", "llm_max_output_tokens"): (int, 48, 1200),
             ("language", "llm_native_fallback"): (bool, None, None),
@@ -6363,14 +6386,9 @@ class MuchaClient(discord.Client):
     ) -> bool:
         if self.language.ready():
             return True
-        diag = self.llm_composer.diagnostics()
-        if not bool(diag.get("enabled")):
-            return False
-        if not bool(diag.get("api_key_present")):
-            return False
-        if spontaneous and not bool(diag.get("spontaneous_enabled")):
-            return False
-        return True
+        return self.llm_composer.ready_hint(
+            spontaneous=spontaneous,
+        )
 
     def _brain_word_feedback(
         self,
