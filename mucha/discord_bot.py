@@ -5635,7 +5635,7 @@ class MuchaClient(discord.Client):
             float(self.cfg.language.reply_cooldown_seconds)
             - (now - last),
         )
-        language_ready = bool(self.language.ready())
+        language_ready = self._text_language_ready()
 
         event_reaction_candidates = []
         event_reaction_pool_total = 0
@@ -6355,6 +6355,22 @@ class MuchaClient(discord.Client):
         self._remember_decision_trace(
             self._text_decision_debug,
         )
+
+    def _text_language_ready(
+        self,
+        *,
+        spontaneous: bool = False,
+    ) -> bool:
+        if self.language.ready():
+            return True
+        diag = self.llm_composer.diagnostics()
+        if not bool(diag.get("enabled")):
+            return False
+        if not bool(diag.get("api_key_present")):
+            return False
+        if spontaneous and not bool(diag.get("spontaneous_enabled")):
+            return False
+        return True
 
     def _brain_word_feedback(
         self,
@@ -7854,7 +7870,7 @@ class MuchaClient(discord.Client):
         contexts: list[dict] = []
         language_ready = bool(
             self.cfg.language.spontaneous_text
-            and self.language.ready()
+            and self._text_language_ready(spontaneous=True)
         )
 
         for guild in self.guilds:
@@ -8338,7 +8354,7 @@ class MuchaClient(discord.Client):
             if (
                 not isinstance(channel, discord.TextChannel)
                 or self._is_text_channel_blocked(channel)
-                or not self.language.ready()
+                or not self._text_language_ready(spontaneous=True)
             ):
                 result["detail"] = "text target became unavailable"
                 return result
@@ -9369,7 +9385,10 @@ class MuchaClient(discord.Client):
             return
 
         # Legacy spontaneous path remains available only when 24D is disabled.
-        if not self.cfg.language.spontaneous_text or not self.language.ready():
+        if (
+            not self.cfg.language.spontaneous_text
+            or not self._text_language_ready(spontaneous=True)
+        ):
             return
         if not spontaneous_gate["passed"]:
             return
