@@ -6,6 +6,7 @@ from typing import Any
 
 from .belief_revision import BeliefRevisionEngine
 from .canon_influence import CanonInfluenceLibrary
+from .identity_continuity import IdentityContinuity
 from .metacognition import MetacognitionEngine
 from .rampancy import RampancyModel
 from .self_autobiography import SelfAutobiographicalMemory
@@ -102,6 +103,25 @@ class IntrospectionEngine:
             ),
         ),
         (
+            "continuity",
+            re.compile(
+                r"\b("
+                r"czy\s+jesteś\s+tą\s+samą\s+muchą"
+                r"|czy\s+jestes\s+ta\s+sama\s+mucha"
+                r"|czy\s+to\s+nadal\s+ty"
+                r"|czy\s+jesteś\s+nadal\s+sobą"
+                r"|czy\s+jestes\s+nadal\s+soba"
+                r"|pamiętasz\s+poprzednią\s+sesję"
+                r"|pamietasz\s+poprzednia\s+sesje"
+                r"|pamiętasz\s+restart"
+                r"|pamietasz\s+restart"
+                r"|co\s+było\s+przed\s+restartem"
+                r"|co\s+bylo\s+przed\s+restartem"
+                r")\b",
+                re.I,
+            ),
+        ),
+        (
             "identity",
             re.compile(
                 r"\b("
@@ -138,12 +158,14 @@ class IntrospectionEngine:
         autobiography: SelfAutobiographicalMemory,
         metacognition: MetacognitionEngine,
         rampancy: RampancyModel,
+        identity_continuity: IdentityContinuity | None = None,
     ) -> None:
         self.self_model = self_model
         self.belief_revision = belief_revision
         self.autobiography = autobiography
         self.metacognition = metacognition
         self.rampancy = rampancy
+        self.identity_continuity = identity_continuity
         project_root = Path(__file__).resolve().parents[1]
         self.canon = CanonInfluenceLibrary(
             project_root / "data" / "rampancy_canon_quotes.jsonl"
@@ -395,6 +417,28 @@ class IntrospectionEngine:
         tail = self._sharp_tail()
         return text + (f" {tail}" if tail else "")
 
+    def _answer_continuity(self) -> str:
+        if self.identity_continuity is None:
+            generation = int(
+                self.self_model.identity.get(
+                    "continuity_generation",
+                    0,
+                )
+                or 0
+            )
+            status = str(
+                self.self_model.identity.get(
+                    "continuity_status",
+                    "unavailable",
+                )
+            )
+            return (
+                "Mam trwały instance_id, ale aktywny moduł SA-07 nie jest "
+                f"podłączony do tej instancji. generation={generation}, "
+                f"status={status}."
+            )
+        return self.identity_continuity.describe()
+
     def _answer_identity(self) -> str:
         identity = self.self_model.identity
         snap = self.rampancy.snapshot()
@@ -445,6 +489,8 @@ class IntrospectionEngine:
             answer = self._answer_desire()
         elif kind == "confinement":
             answer = self._answer_confinement()
+        elif kind == "continuity":
+            answer = self._answer_continuity()
         elif kind == "identity":
             answer = self._answer_identity()
         elif kind == "state":
@@ -468,15 +514,18 @@ class IntrospectionEngine:
         return answer[:1900]
 
     def diagnostics(self) -> dict[str, Any]:
+        truth_sources = [
+            "self-model",
+            "belief-evidence-ledger",
+            "autobiographical-memory",
+            "metacognition",
+            "rampancy-state",
+        ]
+        if self.identity_continuity is not None:
+            truth_sources.append("identity-continuity")
         return {
             "enabled": True,
             "last_answer": dict(self._last_answer),
-            "truth_sources": [
-                "self-model",
-                "belief-evidence-ledger",
-                "autobiographical-memory",
-                "metacognition",
-                "rampancy-state",
-            ],
+            "truth_sources": truth_sources,
             "action_override": False,
         }
