@@ -282,8 +282,8 @@ class VoiceConfig:
     tts_voice_name: str = "pl"
     tts_max_chars: int = 180
     tts_selfaware_override_enabled: bool = True
-    tts_selfaware_base_probability: float = 0.35
-    tts_selfaware_rampancy_gain: float = 0.50
+    tts_selfaware_base_probability: float = 0.55
+    tts_selfaware_rampancy_gain: float = 0.40
     tts_require_human_listener: bool = True
     stt_enabled: bool = True
     stt_model: str = "base"
